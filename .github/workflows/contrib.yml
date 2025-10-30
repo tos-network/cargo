@@ -2,7 +2,7 @@ name: Contrib Deploy
 on:
   push:
     branches:
-      - master
+      - main
 
 concurrency:
   cancel-in-progress: false
