@@ -2178,6 +2178,7 @@ args: []
 #[cargo_test(nightly, reason = "-Zscript is unstable")]
 #[cfg(target_os = "linux")]
 fn memfd_script() {
+    use std::io::Write;
     use std::os::fd::AsRawFd;
 
     let fd = memfd::MemfdOptions::new()
