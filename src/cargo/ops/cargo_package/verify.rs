@@ -3,8 +3,8 @@
 use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
-use std::io::prelude::*;
 use std::io::SeekFrom;
+use std::io::prelude::*;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -14,19 +14,19 @@ use cargo_util::paths;
 use flate2::read::GzDecoder;
 use tar::Archive;
 
-use crate::core::compiler::BuildConfig;
-use crate::core::compiler::DefaultExecutor;
-use crate::core::compiler::Executor;
-use crate::core::compiler::UserIntent;
+use crate::CargoResult;
 use crate::core::Feature;
 use crate::core::Package;
 use crate::core::SourceId;
 use crate::core::Workspace;
+use crate::core::compiler::BuildConfig;
+use crate::core::compiler::DefaultExecutor;
+use crate::core::compiler::Executor;
+use crate::core::compiler::UserIntent;
 use crate::ops;
 use crate::sources::PathSource;
 use crate::util;
 use crate::util::FileLock;
-use crate::CargoResult;
 
 use super::PackageOpts;
 use super::TmpRegistry;
@@ -66,13 +66,10 @@ pub fn run_verify(
     let new_pkg = src.root_package()?;
     let pkg_fingerprint = hash_all(&dst)?;
 
-    let target_dir = if gctx.cli_unstable().build_dir {
-        Some(ws.build_dir())
-    } else {
-        None
-    };
-
-    let mut ws = Workspace::ephemeral(new_pkg, gctx, target_dir, true)?;
+    // When packaging we use an ephemeral workspace but reuse the build cache to reduce
+    // verification time if the user has already compiled the dependencies and the fingerprint
+    // is unchanged.
+    let mut ws = Workspace::ephemeral(new_pkg, gctx, Some(ws.build_dir()), true)?;
     if let Some(local_reg) = local_reg {
         ws.add_local_overlay(
             local_reg.upstream,

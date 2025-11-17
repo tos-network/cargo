@@ -22,7 +22,7 @@ use crate::core::{
 use crate::sources::source::QueryKind;
 use crate::util::closest_msg;
 use crate::util::errors::CargoResult;
-use crate::util::interning::{InternedString, INTERNED_DEFAULT};
+use crate::util::interning::{INTERNED_DEFAULT, InternedString};
 
 use anyhow::Context as _;
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -573,7 +573,7 @@ syntax so it does not have an implicit feature with that name{}",
                         None => ActivateError::Fatal(anyhow::format_err!(
                             "package `{}` does not have feature `{}`
 
-help: a depednency with that name exists but it is required dependency and only optional dependencies can be used as features.",
+help: a dependency with that name exists but it is required dependency and only optional dependencies can be used as features.",
                             summary.package_id(),
                             feat,
                         )),

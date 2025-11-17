@@ -5,20 +5,22 @@ use std::fs;
 use std::io::Read;
 use std::process::Stdio;
 
-use cargo::core::compiler::UserIntent;
+use crate::prelude::*;
+use crate::utils::cargo_exe;
+use crate::utils::cargo_process;
+use crate::utils::tools;
+use cargo::GlobalContext;
 use cargo::core::Shell;
 use cargo::core::Workspace;
+use cargo::core::compiler::UserIntent;
 use cargo::ops::CompileOptions;
-use cargo::GlobalContext;
 use cargo_test_support::compare::assert_e2e;
 use cargo_test_support::paths::root;
-use cargo_test_support::prelude::*;
 use cargo_test_support::registry::Package;
 use cargo_test_support::str;
 use cargo_test_support::{
-    basic_bin_manifest, basic_lib_manifest, basic_manifest, cargo_exe, cargo_process, git,
-    is_nightly, main_file, paths, process, project, rustc_host, sleep_ms, symlink_supported, t,
-    tools, Execs, ProjectBuilder,
+    Execs, ProjectBuilder, basic_bin_manifest, basic_lib_manifest, basic_manifest, git, is_nightly,
+    main_file, paths, process, project, rustc_host, sleep_ms, symlink_supported, t,
 };
 use cargo_util::paths::dylib_path_envvar;
 
@@ -375,11 +377,11 @@ Caused by:
   could not parse TOML configuration in `[ROOT]/foo/.cargo/config.toml`
 
 Caused by:
-  TOML parse error at line 1, column 1
+  TOML parse error at line 1, column 2
     |
   1 | !
-    | ^
-  invalid key
+    |  ^
+  key with no value, expected `=`
 
 "#]])
         .run();
@@ -416,13 +418,11 @@ fn cargo_compile_with_invalid_manifest2() {
     p.cargo("build")
         .with_status(101)
         .with_stderr_data(str![[r#"
-[ERROR] invalid string
-expected `"`, `'`
+[ERROR] string values must be quoted, expected literal string
  --> Cargo.toml:3:23
   |
 3 |                 foo = bar
-  |                       ^
-  |
+  |                       ^^^
 
 "#]])
         .run();
@@ -435,13 +435,11 @@ fn cargo_compile_with_invalid_manifest3() {
     p.cargo("build --manifest-path src/Cargo.toml")
         .with_status(101)
         .with_stderr_data(str![[r#"
-[ERROR] invalid string
-expected `"`, `'`
+[ERROR] string values must be quoted, expected literal string
  --> src/Cargo.toml:1:5
   |
 1 | a = bar
-  |     ^
-  |
+  |     ^^^
 
 "#]])
         .run();
@@ -496,7 +494,6 @@ fn cargo_compile_with_invalid_version() {
   |
 4 |         version = "1.0"
   |                   ^^^^^
-  |
 
 "#]])
         .run();
@@ -516,7 +513,6 @@ fn cargo_compile_with_empty_package_name() {
   |
 3 |         name = ""
   |                ^^
-  |
 
 "#]])
         .run();
@@ -536,7 +532,6 @@ fn cargo_compile_with_invalid_package_name() {
   |
 3 |         name = "foo@bar"
   |                ^^^^^^^^^
-  |
 
 "#]])
         .run();
@@ -670,20 +665,24 @@ fn cargo_compile_api_exposes_artifact_paths() {
 
     assert_eq!(1, result.binaries.len());
     assert!(result.binaries[0].path.exists());
-    assert!(result.binaries[0]
-        .path
-        .to_str()
-        .unwrap()
-        .contains("the_foo_bin"));
+    assert!(
+        result.binaries[0]
+            .path
+            .to_str()
+            .unwrap()
+            .contains("the_foo_bin")
+    );
 
     assert_eq!(1, result.cdylibs.len());
     // The exact library path varies by platform, but should certainly exist at least
     assert!(result.cdylibs[0].path.exists());
-    assert!(result.cdylibs[0]
-        .path
-        .to_str()
-        .unwrap()
-        .contains("the_foo_lib"));
+    assert!(
+        result.cdylibs[0]
+            .path
+            .to_str()
+            .unwrap()
+            .contains("the_foo_lib")
+    );
 }
 
 #[cargo_test]
@@ -1313,7 +1312,6 @@ fn cargo_compile_with_invalid_dep_rename() {
   |
 8 |                 "haha this isn't a valid name 🐛" = { package = "libc", version = "0.1" }
   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  |
 
 "#]])
         .run();
@@ -2250,422 +2248,6 @@ Goodbye, World!
 }
 
 #[cargo_test]
-fn non_existing_test() {
-    let p = project()
-        .file(
-            "Cargo.toml",
-            r#"
-                [package]
-                name = "foo"
-                version = "1.0.0"
-                edition = "2015"
-
-                [lib]
-                name = "foo"
-                path = "src/lib.rs"
-
-                [[test]]
-                name = "hello"
-            "#,
-        )
-        .file("src/lib.rs", "")
-        .build();
-
-    p.cargo("build --tests -v")
-        .with_status(101)
-        .with_stderr_data(str![[r#"
-[ERROR] failed to parse manifest at `[ROOT]/foo/Cargo.toml`
-
-Caused by:
-  can't find `hello` test at `tests/hello.rs` or `tests/hello/main.rs`. Please specify test.path if you want to use a non-default path.
-
-"#]])
-        .run();
-}
-
-#[cargo_test]
-fn non_existing_example() {
-    let p = project()
-        .file(
-            "Cargo.toml",
-            r#"
-                [package]
-                name = "foo"
-                version = "1.0.0"
-                edition = "2015"
-
-                [lib]
-                name = "foo"
-                path = "src/lib.rs"
-
-                [[example]]
-                name = "hello"
-            "#,
-        )
-        .file("src/lib.rs", "")
-        .build();
-
-    p.cargo("build --examples -v")
-        .with_status(101)
-        .with_stderr_data(str![[r#"
-[ERROR] failed to parse manifest at `[ROOT]/foo/Cargo.toml`
-
-Caused by:
-  can't find `hello` example at `examples/hello.rs` or `examples/hello/main.rs`. Please specify example.path if you want to use a non-default path.
-
-"#]])
-        .run();
-}
-
-#[cargo_test]
-fn non_existing_benchmark() {
-    let p = project()
-        .file(
-            "Cargo.toml",
-            r#"
-                [package]
-                name = "foo"
-                version = "1.0.0"
-                edition = "2015"
-
-                [lib]
-                name = "foo"
-                path = "src/lib.rs"
-
-                [[bench]]
-                name = "hello"
-            "#,
-        )
-        .file("src/lib.rs", "")
-        .build();
-
-    p.cargo("build --benches -v")
-        .with_status(101)
-        .with_stderr_data(str![[r#"
-[ERROR] failed to parse manifest at `[ROOT]/foo/Cargo.toml`
-
-Caused by:
-  can't find `hello` bench at `benches/hello.rs` or `benches/hello/main.rs`. Please specify bench.path if you want to use a non-default path.
-
-"#]])
-        .run();
-}
-
-#[cargo_test]
-fn non_existing_binary() {
-    let p = project()
-        .file("Cargo.toml", &basic_bin_manifest("foo"))
-        .file("src/lib.rs", "")
-        .file("src/bin/ehlo.rs", "")
-        .build();
-
-    p.cargo("build -v")
-        .with_status(101)
-        .with_stderr_data(str![[r#"
-[ERROR] failed to parse manifest at `[ROOT]/foo/Cargo.toml`
-
-Caused by:
-  can't find `foo` bin at `src/bin/foo.rs` or `src/bin/foo/main.rs`. Please specify bin.path if you want to use a non-default path.
-
-"#]])
-        .run();
-}
-
-#[cargo_test]
-fn commonly_wrong_path_of_test() {
-    let p = project()
-        .file(
-            "Cargo.toml",
-            r#"
-                [package]
-                name = "foo"
-                version = "1.0.0"
-                edition = "2015"
-
-                [lib]
-                name = "foo"
-                path = "src/lib.rs"
-
-                [[test]]
-                name = "foo"
-            "#,
-        )
-        .file("src/lib.rs", "")
-        .file("test/foo.rs", "")
-        .build();
-
-    p.cargo("build --tests -v")
-        .with_status(101)
-        .with_stderr_data(str![[r#"
-[ERROR] failed to parse manifest at `[ROOT]/foo/Cargo.toml`
-
-Caused by:
-  can't find `foo` test at default paths, but found a file at `test/foo.rs`.
-  Perhaps rename the file to `tests/foo.rs` for target auto-discovery, or specify test.path if you want to use a non-default path.
-
-"#]])
-        .run();
-}
-
-#[cargo_test]
-fn commonly_wrong_path_of_example() {
-    let p = project()
-        .file(
-            "Cargo.toml",
-            r#"
-                [package]
-                name = "foo"
-                version = "1.0.0"
-                edition = "2015"
-
-                [lib]
-                name = "foo"
-                path = "src/lib.rs"
-
-                [[example]]
-                name = "foo"
-            "#,
-        )
-        .file("src/lib.rs", "")
-        .file("example/foo.rs", "")
-        .build();
-
-    p.cargo("build --examples -v")
-        .with_status(101)
-        .with_stderr_data(str![[r#"
-[ERROR] failed to parse manifest at `[ROOT]/foo/Cargo.toml`
-
-Caused by:
-  can't find `foo` example at default paths, but found a file at `example/foo.rs`.
-  Perhaps rename the file to `examples/foo.rs` for target auto-discovery, or specify example.path if you want to use a non-default path.
-
-"#]])
-        .run();
-}
-
-#[cargo_test]
-fn commonly_wrong_path_of_benchmark() {
-    let p = project()
-        .file(
-            "Cargo.toml",
-            r#"
-                [package]
-                name = "foo"
-                version = "1.0.0"
-                edition = "2015"
-
-                [lib]
-                name = "foo"
-                path = "src/lib.rs"
-
-                [[bench]]
-                name = "foo"
-            "#,
-        )
-        .file("src/lib.rs", "")
-        .file("bench/foo.rs", "")
-        .build();
-
-    p.cargo("build --benches -v")
-        .with_status(101)
-        .with_stderr_data(str![[r#"
-[ERROR] failed to parse manifest at `[ROOT]/foo/Cargo.toml`
-
-Caused by:
-  can't find `foo` bench at default paths, but found a file at `bench/foo.rs`.
-  Perhaps rename the file to `benches/foo.rs` for target auto-discovery, or specify bench.path if you want to use a non-default path.
-
-"#]])
-        .run();
-}
-
-#[cargo_test]
-fn commonly_wrong_path_binary() {
-    let p = project()
-        .file("Cargo.toml", &basic_bin_manifest("foo"))
-        .file("src/lib.rs", "")
-        .file("src/bins/foo.rs", "")
-        .build();
-
-    p.cargo("build -v")
-        .with_status(101)
-        .with_stderr_data(str![[r#"
-[ERROR] failed to parse manifest at `[ROOT]/foo/Cargo.toml`
-
-Caused by:
-  can't find `foo` bin at default paths, but found a file at `src/bins/foo.rs`.
-  Perhaps rename the file to `src/bin/foo.rs` for target auto-discovery, or specify bin.path if you want to use a non-default path.
-
-"#]])
-        .run();
-}
-
-#[cargo_test]
-fn commonly_wrong_path_subdir_binary() {
-    let p = project()
-        .file("Cargo.toml", &basic_bin_manifest("foo"))
-        .file("src/lib.rs", "")
-        .file("src/bins/foo/main.rs", "")
-        .build();
-
-    p.cargo("build -v")
-        .with_status(101)
-        .with_stderr_data(str![[r#"
-[ERROR] failed to parse manifest at `[ROOT]/foo/Cargo.toml`
-
-Caused by:
-  can't find `foo` bin at default paths, but found a file at `src/bins/foo/main.rs`.
-  Perhaps rename the file to `src/bin/foo/main.rs` for target auto-discovery, or specify bin.path if you want to use a non-default path.
-
-"#]])
-        .run();
-}
-
-#[cargo_test]
-fn found_multiple_target_files() {
-    let p = project()
-        .file("Cargo.toml", &basic_bin_manifest("foo"))
-        .file("src/lib.rs", "")
-        .file("src/bin/foo.rs", "")
-        .file("src/bin/foo/main.rs", "")
-        .build();
-
-    p.cargo("build -v")
-        .with_status(101)
-        // Don't assert the inferred paths since the order is non-deterministic.
-        .with_stderr_data(str![[r#"
-[ERROR] failed to parse manifest at `[ROOT]/foo/Cargo.toml`
-
-Caused by:
-  cannot infer path for `foo` bin
-  Cargo doesn't know which to use because multiple target files found at `src/bin/foo[..]rs` and `src/bin/foo[..].rs`.
-
-"#]])
-        .run();
-}
-
-#[cargo_test]
-fn legacy_binary_paths_warnings() {
-    let p = project()
-        .file(
-            "Cargo.toml",
-            r#"
-                [package]
-                name = "foo"
-                version = "1.0.0"
-                edition = "2015"
-                authors = []
-
-                [[bin]]
-                name = "bar"
-            "#,
-        )
-        .file("src/lib.rs", "")
-        .file("src/main.rs", "fn main() {}")
-        .build();
-
-    p.cargo("build -v")
-        .with_stderr_data(str![[r#"
-[WARNING] An explicit [[bin]] section is specified in Cargo.toml which currently
-disables Cargo from automatically inferring other binary targets.
-This inference behavior will change in the Rust 2018 edition and the following
-files will be included as a binary target:
-
-* src/main.rs
-
-This is likely to break cargo build or cargo test as these files may not be
-ready to be compiled as a binary target today. You can future-proof yourself
-and disable this warning by adding `autobins = false` to your [package]
-section. You may also move the files to a location where Cargo would not
-automatically infer them to be a target, such as in subfolders.
-
-For more information on this warning you can consult
-https://github.com/rust-lang/cargo/issues/5330
-[WARNING] path `src/main.rs` was erroneously implicitly accepted for binary `bar`,
-please set bin.path in Cargo.toml
-[COMPILING] foo v1.0.0 ([ROOT]/foo)
-[RUNNING] `rustc [..]`
-[RUNNING] `rustc [..]`
-[FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
-
-"#]])
-        .run();
-
-    let p = project()
-        .file(
-            "Cargo.toml",
-            r#"
-                [package]
-                name = "foo"
-                version = "1.0.0"
-                edition = "2015"
-                authors = []
-
-                [[bin]]
-                name = "bar"
-            "#,
-        )
-        .file("src/lib.rs", "")
-        .file("src/bin/main.rs", "fn main() {}")
-        .build();
-
-    p.cargo("build -v")
-        .with_stderr_data(str![[r#"
-[WARNING] An explicit [[bin]] section is specified in Cargo.toml which currently
-disables Cargo from automatically inferring other binary targets.
-This inference behavior will change in the Rust 2018 edition and the following
-files will be included as a binary target:
-
-* src/bin/main.rs
-
-This is likely to break cargo build or cargo test as these files may not be
-ready to be compiled as a binary target today. You can future-proof yourself
-and disable this warning by adding `autobins = false` to your [package]
-section. You may also move the files to a location where Cargo would not
-automatically infer them to be a target, such as in subfolders.
-
-For more information on this warning you can consult
-https://github.com/rust-lang/cargo/issues/5330
-[WARNING] path `src/bin/main.rs` was erroneously implicitly accepted for binary `bar`,
-please set bin.path in Cargo.toml
-[COMPILING] foo v1.0.0 ([ROOT]/foo)
-[RUNNING] `rustc [..]`
-[RUNNING] `rustc [..]`
-[FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
-
-"#]])
-        .run();
-
-    let p = project()
-        .file(
-            "Cargo.toml",
-            r#"
-                [package]
-                name = "foo"
-                version = "1.0.0"
-                edition = "2015"
-                authors = []
-
-                [[bin]]
-                name = "bar"
-            "#,
-        )
-        .file("src/bar.rs", "fn main() {}")
-        .build();
-
-    p.cargo("build -v")
-        .with_stderr_data(str![[r#"
-[WARNING] path `src/bar.rs` was erroneously implicitly accepted for binary `bar`,
-please set bin.path in Cargo.toml
-[COMPILING] foo v1.0.0 ([ROOT]/foo)
-[RUNNING] `rustc [..]`
-[FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
-
-"#]])
-        .run();
-}
-
-#[cargo_test]
 fn implicit_examples() {
     let p = project()
         .file(
@@ -3150,7 +2732,7 @@ Caused by:
     |
   1 | this is not valid toml
     |      ^
-  expected `.`, `=`
+  key with no value, expected `=`
 
 "#]])
         .run();
@@ -3757,11 +3339,12 @@ fn custom_target_dir_line_parameter() {
     p.cargo("build --target-dir foobar/target")
         .env("CARGO_TARGET_DIR", "bar/target")
         .run();
-    assert!(p
-        .root()
-        .join("foobar/target/debug")
-        .join(&exe_name)
-        .is_file());
+    assert!(
+        p.root()
+            .join("foobar/target/debug")
+            .join(&exe_name)
+            .is_file()
+    );
     assert!(p.root().join("bar/target/debug").join(&exe_name).is_file());
     assert!(p.root().join("foo/target/debug").join(&exe_name).is_file());
     assert!(p.root().join("target/debug").join(&exe_name).is_file());
@@ -4905,7 +4488,7 @@ WRAPPER CALLED: rustc --crate-name foo [..]
 
 /// Checks what happens when both rust-wrapper and rustc-workspace-wrapper are set.
 #[cargo_test]
-fn rustc_wrapper_precendence() {
+fn rustc_wrapper_precedence() {
     let p = project().file("src/lib.rs", "").build();
     let rustc_wrapper = tools::echo_wrapper();
     let ws_wrapper = rustc_wrapper.with_file_name("rustc-ws-wrapper");
@@ -5752,7 +5335,11 @@ fn no_linkable_target() {
     p.cargo("build")
         .with_stderr_data(str![[r#"
 [LOCKING] 1 package to latest compatible version
-[WARNING] The package `the_lib` provides no linkable target. The compiler might raise an error while compiling `foo`. Consider adding 'dylib' or 'rlib' to key `crate-type` in `the_lib`'s Cargo.toml. This warning might turn into a hard error in the future.
+[WARNING] the package `the_lib` provides no linkable target
+  |
+  = [NOTE] this might cause `foo` to fail compilation
+  = [NOTE] this warning might turn into a hard error in the future
+  = [HELP] consider adding 'dylib' or 'rlib' to key 'crate-type' in `the_lib`'s Cargo.toml
 [COMPILING] the_lib v0.1.0 ([ROOT]/foo/the_lib)
 [COMPILING] foo v0.1.0 ([ROOT]/foo)
 [FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
@@ -6567,9 +6154,11 @@ fn target_directory_backup_exclusion() {
     p.cargo("build").run();
     let cachedir_tag = p.build_dir().join("CACHEDIR.TAG");
     assert!(cachedir_tag.is_file());
-    assert!(fs::read_to_string(&cachedir_tag)
-        .unwrap()
-        .starts_with("Signature: 8a477f597d28d172789f06886806bc55"));
+    assert!(
+        fs::read_to_string(&cachedir_tag)
+            .unwrap()
+            .starts_with("Signature: 8a477f597d28d172789f06886806bc55")
+    );
     // ...but if target/ already exists CACHEDIR.TAG should not be created in it.
     fs::remove_file(&cachedir_tag).unwrap();
     p.cargo("build").run();

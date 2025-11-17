@@ -76,8 +76,6 @@ use self::features::RequestedFeatures;
 use self::types::{ConflictMap, ConflictReason, DepsFrame};
 use self::types::{FeaturesSet, RcVecIter, RemainingDeps, ResolverProgress};
 
-pub use self::encode::Metadata;
-pub use self::encode::{EncodableDependency, EncodablePackageId, EncodableResolve};
 pub use self::errors::{ActivateError, ActivateResult, ResolveError};
 pub use self::features::{CliFeatures, ForceAllTargets, HasDevUnits};
 pub use self::resolve::{Resolve, ResolveVersion};
@@ -447,7 +445,7 @@ fn activate_deps_loop(
                             frame
                                 .remaining_siblings
                                 .remaining()
-                                .find_map(|(ref new_dep, _, _)| {
+                                .find_map(|(new_dep, _, _)| {
                                     past_conflicting_activations.conflicting(&resolver_ctx, new_dep)
                                 })
                         {

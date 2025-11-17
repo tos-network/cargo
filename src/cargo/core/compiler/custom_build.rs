@@ -31,17 +31,16 @@
 //! [`CompileMode::RunCustomBuild`]: crate::core::compiler::CompileMode::RunCustomBuild
 //! [instructions]: https://doc.rust-lang.org/cargo/reference/build-scripts.html#outputs-of-the-build-script
 
-use super::{fingerprint, get_dynamic_search_path, BuildRunner, Job, Unit, Work};
+use super::{BuildRunner, Job, Unit, Work, fingerprint, get_dynamic_search_path};
+use crate::core::compiler::CompileMode;
 use crate::core::compiler::artifact;
 use crate::core::compiler::build_runner::UnitHash;
-use crate::core::compiler::fingerprint::DirtyReason;
 use crate::core::compiler::job_queue::JobState;
-use crate::core::compiler::CompileMode;
-use crate::core::{profiles::ProfileRoot, PackageId, Target};
+use crate::core::{PackageId, Target, profiles::ProfileRoot};
 use crate::util::errors::CargoResult;
 use crate::util::internal;
 use crate::util::machine_message::{self, Message};
-use anyhow::{bail, Context as _};
+use anyhow::{Context as _, bail};
 use cargo_platform::Cfg;
 use cargo_util::paths;
 use cargo_util_schemas::manifest::RustVersion;
@@ -340,8 +339,6 @@ fn build_work(build_runner: &mut BuildRunner<'_, '_>, unit: &Unit) -> CargoResul
     let script_dir = build_runner.files().build_script_dir(build_script_unit);
     let script_out_dir = build_runner.files().build_script_out_dir(unit);
     let script_run_dir = build_runner.files().build_script_run_dir(unit);
-    let build_plan = bcx.build_config.build_plan;
-    let invocation_name = unit.buildkey();
 
     if let Some(deps) = unit.pkg.manifest().metabuild() {
         prepare_metabuild(build_runner, build_script_unit, deps)?;
@@ -527,7 +524,7 @@ fn build_work(build_runner: &mut BuildRunner<'_, '_>, unit: &Unit) -> CargoResul
         // along to this custom build command. We're also careful to augment our
         // dynamic library search path in case the build script depended on any
         // native dynamic libraries.
-        if !build_plan {
+        {
             let build_script_outputs = build_script_outputs.lock().unwrap();
             for (name, dep_id, dep_metadata) in lib_deps {
                 let script_output = build_script_outputs.get(dep_metadata).ok_or_else(|| {
@@ -554,18 +551,14 @@ fn build_work(build_runner: &mut BuildRunner<'_, '_>, unit: &Unit) -> CargoResul
             }
         }
 
-        if build_plan {
-            state.build_plan(invocation_name, cmd.clone(), Arc::new(Vec::new()));
-            return Ok(());
-        }
-
         // And now finally, run the build command itself!
         state.running(&cmd);
         let timestamp = paths::set_invocation_time(&script_run_dir)?;
         let prefix = format!("[{} {}] ", id.name(), id.version());
         let mut log_messages_in_case_of_panic = Vec::new();
-        let output = cmd
-            .exec_with_streaming(
+        let span = tracing::debug_span!("build_script", process = cmd.to_string());
+        let output = span.in_scope(|| {
+            cmd.exec_with_streaming(
                 &mut |stdout| {
                     if let Some(error) = stdout.strip_prefix(CARGO_ERROR_SYNTAX) {
                         log_messages_in_case_of_panic.push((Severity::Error, error.to_owned()));
@@ -612,7 +605,8 @@ fn build_work(build_runner: &mut BuildRunner<'_, '_>, unit: &Unit) -> CargoResul
                 }
 
                 build_error_context
-            });
+            })
+        });
 
         // If the build failed
         if let Err(error) = output {
@@ -704,11 +698,7 @@ fn build_work(build_runner: &mut BuildRunner<'_, '_>, unit: &Unit) -> CargoResul
         Ok(())
     });
 
-    let mut job = if build_runner.bcx.build_config.build_plan {
-        Job::new_dirty(Work::noop(), DirtyReason::FreshBuild)
-    } else {
-        fingerprint::prepare_target(build_runner, unit, false)?
-    };
+    let mut job = fingerprint::prepare_target(build_runner, unit, false)?;
     if job.freshness().is_dirty() {
         job.before(dirty);
     } else {
@@ -836,7 +826,9 @@ impl BuildOutput {
                         )
                     } else if flag.starts_with("metadata=") {
                         let old_format_flag = flag.strip_prefix("metadata=").unwrap();
-                        format!("Switch to the old `cargo:{old_format_flag}` syntax instead of `cargo::{flag}` (note the single colon).\n")
+                        format!(
+                            "Switch to the old `cargo:{old_format_flag}` syntax instead of `cargo::{flag}` (note the single colon).\n"
+                        )
                     } else {
                         String::new()
                     };
@@ -1067,7 +1059,8 @@ impl BuildOutput {
                         } else {
                             // Setting RUSTC_BOOTSTRAP would change the behavior of the crate.
                             // Abort with an error.
-                            bail!("Cannot set `RUSTC_BOOTSTRAP={}` from {}.\n\
+                            bail!(
+                                "Cannot set `RUSTC_BOOTSTRAP={}` from {}.\n\
                                 note: Crates cannot set `RUSTC_BOOTSTRAP` themselves, as doing so would subvert the stability guarantees of Rust for your project.\n\
                                 help: If you're sure you want to do this in your project, set the environment variable `RUSTC_BOOTSTRAP={}` before running cargo instead.",
                                 val,
@@ -1283,10 +1276,12 @@ pub fn build_map(build_runner: &mut BuildRunner<'_, '_>) -> CargoResult<()> {
 
         // If a package has a build script, add itself as something to inspect for linking.
         if !unit.target.is_custom_build() && unit.pkg.has_custom_build() {
-            let script_meta = build_runner
-                .find_build_script_metadata(unit)
+            let script_metas = build_runner
+                .find_build_script_metadatas(unit)
                 .expect("has_custom_build should have RunCustomBuild");
-            add_to_link(&mut ret, unit.pkg.package_id(), script_meta);
+            for script_meta in script_metas {
+                add_to_link(&mut ret, unit.pkg.package_id(), script_meta);
+            }
         }
 
         if unit.mode.is_run_custom_build() {

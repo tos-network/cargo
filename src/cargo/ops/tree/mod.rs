@@ -3,10 +3,12 @@
 use self::format::Pattern;
 use crate::core::compiler::{CompileKind, RustcTargetData};
 use crate::core::dependency::DepKind;
-use crate::core::resolver::{features::CliFeatures, ForceAllTargets, HasDevUnits};
+use crate::core::resolver::{ForceAllTargets, HasDevUnits, features::CliFeatures};
 use crate::core::{Package, PackageId, PackageIdSpec, PackageIdSpecQuery, Workspace};
+use crate::ops::resolve::SpecsAndResolvedFeatures;
 use crate::ops::{self, Packages};
 use crate::util::CargoResult;
+use crate::util::style;
 use crate::{drop_print, drop_println};
 use anyhow::Context as _;
 use graph::Graph;
@@ -49,6 +51,8 @@ pub struct TreeOptions {
     pub display_depth: DisplayDepth,
     /// Excludes proc-macro dependencies.
     pub no_proc_macro: bool,
+    /// Include only public dependencies.
+    pub public: bool,
 }
 
 #[derive(PartialEq)]
@@ -91,7 +95,6 @@ impl FromStr for Prefix {
 #[derive(Clone, Copy)]
 pub enum DisplayDepth {
     MaxDisplayDepth(u32),
-    Public,
     Workspace,
 }
 
@@ -101,7 +104,6 @@ impl FromStr for DisplayDepth {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "workspace" => Ok(Self::Workspace),
-            "public" => Ok(Self::Public),
             s => s.parse().map(Self::MaxDisplayDepth).map_err(|_| {
                 clap::Error::raw(
                     clap::error::ErrorKind::ValueValidation,
@@ -179,61 +181,67 @@ pub fn build_and_print(ws: &Workspace<'_>, opts: &TreeOptions) -> CargoResult<()
         .map(|pkg| (pkg.package_id(), pkg))
         .collect();
 
-    let mut graph = graph::build(
-        ws,
-        &ws_resolve.targeted_resolve,
-        &ws_resolve.resolved_features,
-        &specs,
-        &opts.cli_features,
-        &target_data,
-        &requested_kinds,
-        package_map,
-        opts,
-    )?;
-
-    let root_specs = if opts.invert.is_empty() {
-        specs
-    } else {
-        opts.invert
-            .iter()
-            .map(|p| PackageIdSpec::parse(p))
-            .collect::<Result<Vec<PackageIdSpec>, _>>()?
-    };
-    let root_ids = ws_resolve.targeted_resolve.specs_to_ids(&root_specs)?;
-    let root_indexes = graph.indexes_from_ids(&root_ids);
-
-    let root_indexes = if opts.duplicates {
-        // `-d -p foo` will only show duplicates within foo's subtree
-        graph = graph.from_reachable(root_indexes.as_slice());
-        graph.find_duplicates()
-    } else {
-        root_indexes
-    };
-
-    if !opts.invert.is_empty() || opts.duplicates {
-        graph.invert();
-    }
-
-    // Packages to prune.
-    let pkgs_to_prune = opts
-        .pkgs_to_prune
-        .iter()
-        .map(|p| PackageIdSpec::parse(p).map_err(Into::into))
-        .map(|r| {
-            // Provide an error message if pkgid is not within the resolved
-            // dependencies graph.
-            r.and_then(|spec| spec.query(ws_resolve.targeted_resolve.iter()).and(Ok(spec)))
-        })
-        .collect::<CargoResult<Vec<PackageIdSpec>>>()?;
-
-    if root_indexes.len() == 0 {
-        ws.gctx().shell().warn(
-            "nothing to print.\n\n\
-        To find dependencies that require specific target platforms, \
-        try to use option `--target all` first, and then narrow your search scope accordingly.",
+    for SpecsAndResolvedFeatures {
+        specs,
+        resolved_features,
+    } in ws_resolve.specs_and_features
+    {
+        let mut graph = graph::build(
+            ws,
+            &ws_resolve.targeted_resolve,
+            &resolved_features,
+            &specs,
+            &opts.cli_features,
+            &target_data,
+            &requested_kinds,
+            package_map.clone(),
+            opts,
         )?;
-    } else {
-        print(ws, opts, root_indexes, &pkgs_to_prune, &graph)?;
+
+        let root_specs = if opts.invert.is_empty() {
+            specs
+        } else {
+            opts.invert
+                .iter()
+                .map(|p| PackageIdSpec::parse(p))
+                .collect::<Result<Vec<PackageIdSpec>, _>>()?
+        };
+        let root_ids = ws_resolve.targeted_resolve.specs_to_ids(&root_specs)?;
+        let root_indexes = graph.indexes_from_ids(&root_ids);
+
+        let root_indexes = if opts.duplicates {
+            // `-d -p foo` will only show duplicates within foo's subtree
+            graph = graph.from_reachable(root_indexes.as_slice());
+            graph.find_duplicates()
+        } else {
+            root_indexes
+        };
+
+        if !opts.invert.is_empty() || opts.duplicates {
+            graph.invert();
+        }
+
+        // Packages to prune.
+        let pkgs_to_prune = opts
+            .pkgs_to_prune
+            .iter()
+            .map(|p| PackageIdSpec::parse(p).map_err(Into::into))
+            .map(|r| {
+                // Provide an error message if pkgid is not within the resolved
+                // dependencies graph.
+                r.and_then(|spec| spec.query(ws_resolve.targeted_resolve.iter()).and(Ok(spec)))
+            })
+            .collect::<CargoResult<Vec<PackageIdSpec>>>()?;
+
+        if root_indexes.len() == 0 {
+            ws.gctx().shell().warn(
+                "nothing to print.\n\n\
+            To find dependencies that require specific target platforms, \
+            try to use option `--target all` first, and then narrow your search scope accordingly.",
+            )?;
+        } else {
+            print(ws, opts, root_indexes, &pkgs_to_prune, &graph)?;
+        }
     }
     Ok(())
 }
@@ -399,12 +407,12 @@ fn print_dependencies<'a>(
 
     let name = match kind {
         EdgeKind::Dep(DepKind::Normal) => None,
-        EdgeKind::Dep(DepKind::Build) => {
-            Some(color_print::cstr!("<blue,bold>[build-dependencies]</>"))
-        }
-        EdgeKind::Dep(DepKind::Development) => {
-            Some(color_print::cstr!("<cyan,bold>[dev-dependencies]</>"))
-        }
+        EdgeKind::Dep(DepKind::Build) => Some(color_print::cstr!(
+            "<bright-blue,bold>[build-dependencies]</>"
+        )),
+        EdgeKind::Dep(DepKind::Development) => Some(color_print::cstr!(
+            "<bright-cyan,bold>[dev-dependencies]</>"
+        )),
         EdgeKind::Feature => None,
     };
 
@@ -419,15 +427,9 @@ fn print_dependencies<'a>(
         }
     }
 
-    let (max_display_depth, filter_non_workspace_member, filter_private) = match display_depth {
-        DisplayDepth::MaxDisplayDepth(max) => (max, false, false),
-        DisplayDepth::Workspace => (u32::MAX, true, false),
-        DisplayDepth::Public => {
-            if !ws.gctx().cli_unstable().unstable_options {
-                anyhow::bail!("`--depth public` requires `-Zunstable-options`")
-            }
-            (u32::MAX, false, true)
-        }
+    let (max_display_depth, filter_non_workspace_member) = match display_depth {
+        DisplayDepth::MaxDisplayDepth(max) => (max, false),
+        DisplayDepth::Workspace => (u32::MAX, true),
     };
 
     // Current level exceeds maximum display depth. Skip.
@@ -444,17 +446,9 @@ fn print_dependencies<'a>(
                     if filter_non_workspace_member && !ws.is_member_id(*package_id) {
                         return false;
                     }
-                    if filter_private && !dep.public() {
-                        return false;
-                    }
                     !pkgs_to_prune.iter().any(|spec| spec.matches(*package_id))
                 }
-                Node::Feature { .. } => {
-                    if filter_private && !dep.public() {
-                        return false;
-                    }
-                    true
-                }
+                Node::Feature { .. } => true,
             }
         })
         .peekable();
@@ -484,13 +478,9 @@ fn print_dependencies<'a>(
 
 fn edge_line_color(kind: EdgeKind) -> anstyle::Style {
     match kind {
-        EdgeKind::Dep(DepKind::Normal) => anstyle::Style::new() | anstyle::Effects::DIMMED,
-        EdgeKind::Dep(DepKind::Build) => {
-            anstyle::AnsiColor::Blue.on_default() | anstyle::Effects::BOLD
-        }
-        EdgeKind::Dep(DepKind::Development) => {
-            anstyle::AnsiColor::Cyan.on_default() | anstyle::Effects::BOLD
-        }
-        EdgeKind::Feature => anstyle::AnsiColor::Magenta.on_default() | anstyle::Effects::DIMMED,
+        EdgeKind::Dep(DepKind::Normal) => style::DEP_NORMAL,
+        EdgeKind::Dep(DepKind::Build) => style::DEP_BUILD,
+        EdgeKind::Dep(DepKind::Development) => style::DEP_DEV,
+        EdgeKind::Feature => style::DEP_FEATURE,
     }
 }

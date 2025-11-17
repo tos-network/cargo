@@ -1,7 +1,7 @@
 //! Tests for build.rs rerun-if-env-changed and rustc-env
 
+use crate::prelude::*;
 use cargo_test_support::basic_manifest;
-use cargo_test_support::prelude::*;
 use cargo_test_support::project;
 use cargo_test_support::sleep_ms;
 use cargo_test_support::str;
@@ -385,7 +385,7 @@ fn rustc_cfg_with_and_without_value() {
 }
 
 #[cargo_test]
-fn rerun_if_env_is_exsited_config() {
+fn rerun_if_env_exists_in_config() {
     let p = project()
         .file("src/main.rs", "fn main() {}")
         .file(

@@ -15,13 +15,14 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::bail;
-use cargo_util::paths;
 use cargo_util::ProcessBuilder;
 use cargo_util::Sha256;
+use cargo_util::paths;
+use serde::Serialize;
 
-use crate::core::manifest::ManifestMetadata;
-use crate::CargoResult;
 use crate::CARGO_ENV;
+use crate::CargoResult;
+use crate::core::manifest::ManifestMetadata;
 
 /// The current format version of [`EncodedDepInfo`].
 const CURRENT_ENCODED_DEP_INFO_VERSION: u8 = 1;
@@ -502,11 +503,19 @@ fn make_absolute_path(
     build_root: &Path,
     path: PathBuf,
 ) -> PathBuf {
-    match ty {
-        DepInfoPathType::PackageRootRelative => pkg_root.join(path),
-        // N.B. path might be absolute here in which case the join will have no effect
-        DepInfoPathType::BuildRootRelative => build_root.join(path),
+    let relative_to = match ty {
+        DepInfoPathType::PackageRootRelative => pkg_root,
+        // N.B. path might be absolute here in which case the join below will have no effect
+        DepInfoPathType::BuildRootRelative => build_root,
+    };
+
+    if path.as_os_str().is_empty() {
+        // Joining with an empty path causes Rust to add a trailing path separator. On Windows, this
+        // would add an invalid trailing backslash to the .d file.
+        return relative_to.to_path_buf();
     }
+
+    relative_to.join(path)
 }
 
 /// Some algorithms are here to ensure compatibility with possible rustc outputs.
@@ -660,6 +669,15 @@ impl fmt::Display for Checksum {
     }
 }
 
+impl Serialize for Checksum {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum InvalidChecksum {
     #[error("algorithm portion incorrect, expected `sha256`, or `blake3`")]
@@ -756,7 +774,7 @@ mod encoded_dep_info {
             0x72, 0x75, 0x73, 0x74, // path bytes: "rust"
             0x00, 0x00, 0x00, 0x00, // # of env vars
         ];
-        // Cargo can't recognize v0 after `-Zchecksum-freshess` added.
+        // Cargo can't recognize v0 after `-Zchecksum-freshness` added.
         assert!(EncodedDepInfo::parse(&data).is_none());
     }
 }

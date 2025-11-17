@@ -28,6 +28,7 @@ jobs:
       - resolver
       - rustfmt
       - schema
+      - spellcheck
       - test
       - test_gitoxide
     permissions:
@@ -53,7 +54,7 @@ jobs:
   rustfmt:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - run: rustup update stable && rustup default stable
     - run: rustup component add rustfmt
     - run: cargo fmt --all --check
@@ -62,7 +63,7 @@ jobs:
   clippy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: rustup toolchain install 1.89.0 && rustup default 1.89.0
       - run: rustup component add clippy
       - run: cargo clippy --workspace --all-targets --no-deps -- -D warnings
@@ -70,14 +71,14 @@ jobs:
   stale-label:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: rustup update stable && rustup default stable
       - run: cargo stale-label
 
   lint-docs:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: rustup update stable && rustup default stable
       - run: cargo lint-docs --check
 
@@ -85,24 +86,25 @@ jobs:
   lockfile:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: rustup update stable && rustup default stable
       - run: cargo update -p cargo --locked
 
 #  check-version-bump:
 #    runs-on: ubuntu-latest
+#    if: github.repository_owner == 'rust-lang'
 #    env:
 #      BASE_SHA: ${{ github.event.pull_request.base.sha }}
 #      HEAD_SHA: ${{ github.event.pull_request.head.sha != '' && github.event.pull_request.head.sha || github.sha  }}
 #    steps:
-#      - uses: actions/checkout@v4
+#      - uses: actions/checkout@v5
 #        with:
 #          fetch-depth: 0
-#      - run: rustup toolchain install 1.78.0 && rustup default 1.78.0
+#      - run: rustup update stable && rustup default stable
 #      - name: Install cargo-semver-checks
 #        run: |
 #          mkdir installed-bins
-#          curl -Lf https://github.com/obi1kenobi/cargo-semver-checks/releases/download/v0.41.0/cargo-semver-checks-x86_64-unknown-linux-gnu.tar.gz \
+#          curl -Lf https://github.com/obi1kenobi/cargo-semver-checks/releases/download/v0.45.0/cargo-semver-checks-x86_64-unknown-linux-gnu.tar.gz \
 #            | tar -xz --directory=./installed-bins
 #          echo `pwd`/installed-bins >> $GITHUB_PATH
 #      - run: ci/validate-version-bump.sh
@@ -143,6 +145,10 @@ jobs:
           os: macos-14
           rust: 1.89.0
           other: x86_64-apple-darwin
+#        - name: macOS aarch64 nightly
+#          os: macos-14
+#          rust: nightly
+#          other: x86_64-apple-darwin
 #        - name: macOS x86_64 nightly
 #          os: macos-13
 #          rust: nightly
@@ -159,13 +165,21 @@ jobs:
 #          os: windows-latest
 #          rust: nightly-msvc
 #          other: i686-pc-windows-msvc
+#        - name: Windows aarch64 MSVC stable
+#          os: windows-11-arm
+#          rust: stable-msvc
+#          other: i686-pc-windows-msvc
+#        - name: Windows aarch64 MSVC nightly
+#          os: windows-11-arm
+#          rust: nightly-msvc
+#          other: i686-pc-windows-msvc
 #        - name: Windows x86_64 gnu nightly # runs out of space while trying to link the test suite
 #          os: windows-latest
 #          rust: nightly-gnu
 #          other: i686-pc-windows-gnu
     name: Tests ${{ matrix.name }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - name: Dump Environment
       run: ci/dump-environment.sh
     # Some tests require stable. Make sure it is set to the most recent stable
@@ -187,6 +201,10 @@ jobs:
       shell: pwsh
       run: Add-Content $env:GITHUB_PATH "C:\Program Files (x86)\Windows Kits\10\Debuggers\x64"
       if: matrix.os == 'windows-latest'
+    - name: Add Windows debuggers bin to PATH
+      shell: pwsh
+      run: Add-Content $env:GITHUB_PATH "C:\Program Files (x86)\Windows Kits\10\Debuggers\arm64"
+      if: matrix.os == 'windows-11-arm'
     - name: Configure extra test environment
       run: echo CARGO_CONTAINER_TESTS=1 >> $GITHUB_ENV
       if: matrix.os == 'ubuntu-latest'
@@ -230,21 +248,21 @@ jobs:
   schema:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - run: rustup update stable && rustup default stable
     - run: cargo test -p cargo-util-schemas -F unstable-schema
 
   resolver:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - run: rustup update stable && rustup default stable
     - run: cargo test -p resolver-tests
 
   test_gitoxide:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: rustup toolchain install 1.89.0 && rustup default 1.89.0
       - run: rustup target add i686-unknown-linux-gnu
       - run: rustup target add wasm32-unknown-unknown
@@ -257,8 +275,8 @@ jobs:
   build_std:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - run: rustup update stable && rustup default stable
+    - uses: actions/checkout@v5
+    - run: rustup update nightly && rustup default nightly
     - run: rustup component add rust-src
     - run: cargo build
     - run: cargo test -p cargo --test build-std
@@ -267,10 +285,11 @@ jobs:
 #  docs:
 #    runs-on: ubuntu-latest
 #    steps:
-#    - uses: actions/checkout@v4
+#    - uses: actions/checkout@v5
 #    - run: rustup update nightly && rustup default nightly
 #    - run: rustup update stable
 #    - run: rustup component add rust-docs
+#    - run: rustup component add rustfmt --toolchain stable
 #    - run: ci/validate-man.sh
 #    # This requires rustfmt, use stable.
 #    - name: Run semver-check
@@ -282,7 +301,7 @@ jobs:
 #    - name: Install mdbook
 #      run: |
 #        mkdir mdbook
-#        curl -Lf https://github.com/rust-lang/mdBook/releases/download/v0.4.44/mdbook-v0.4.44-x86_64-unknown-linux-gnu.tar.gz | tar -xz --directory=./mdbook
+#        curl -Lf https://github.com/rust-lang/mdBook/releases/download/v0.4.52/mdbook-v0.4.52-x86_64-unknown-linux-gnu.tar.gz | tar -xz --directory=./mdbook
 #        echo `pwd`/mdbook >> $GITHUB_PATH
 #    - run: cd src/doc && mdbook build --dest-dir ../../target/doc
 #    - name: Run linkchecker.sh
@@ -294,6 +313,15 @@ jobs:
   msrv:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - uses: taiki-e/install-action@cargo-hack
-    - run: cargo hack check --all-targets --workspace --ignore-private --locked
+    - run: cargo hack check --all-targets --rust-version --workspace --ignore-private --locked
+
+  spellcheck:
+    name: Spell Check with Typos
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Actions Repository
+      uses: actions/checkout@v5
+    - name: Spell Check Repo
+      uses: crate-ci/typos@v1.38.1

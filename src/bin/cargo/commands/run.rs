@@ -43,7 +43,8 @@ pub fn cli() -> Command {
         .arg_unit_graph()
         .arg_timings()
         .after_help(color_print::cstr!(
-            "Run `<cyan,bold>cargo help run</>` for more detailed information.\n"
+            "Run `<bright-cyan,bold>cargo help run</>` for more detailed information.\n\
+             To pass `--help` to the specified binary, use `<bright-cyan,bold>-- --help</>`.\n",
         ))
 }
 
@@ -121,7 +122,9 @@ pub fn exec_manifest_command(gctx: &mut GlobalContext, cmd: &str, args: &[OsStri
                         args.into_iter().map(|os| os.to_string_lossy()).join(" ")
                     )
                 };
-                format!("\nhelp: there is a command with a similar name: `{suggested_command} {actual_args}{args}`")
+                format!(
+                    "\nhelp: there is a command with a similar name: `{suggested_command} {actual_args}{args}`"
+                )
             } else {
                 "".to_owned()
             };
@@ -153,12 +156,16 @@ pub fn exec_manifest_command(gctx: &mut GlobalContext, cmd: &str, args: &[OsStri
                         args.into_iter().map(|os| os.to_string_lossy()).join(" ")
                     )
                 };
-                format!("\nhelp: there is a command with a similar name: `{suggested_command} {actual_args}{args}`")
+                format!(
+                    "\nhelp: there is a command with a similar name: `{suggested_command} {actual_args}{args}`"
+                )
             } else {
                 "".to_owned()
             };
             let suggested_script = if let Some(suggested_script) = suggested_script(cmd) {
-                format!("\nhelp: there is a script with a similar name: `{suggested_script}` (requires `-Zscript`)")
+                format!(
+                    "\nhelp: there is a script with a similar name: `{suggested_script}` (requires `-Zscript`)"
+                )
             } else {
                 "".to_owned()
             };

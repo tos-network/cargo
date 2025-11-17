@@ -1,6 +1,6 @@
 //! Tests for namespaced features.
 
-use cargo_test_support::prelude::*;
+use crate::prelude::*;
 use cargo_test_support::registry::{Dependency, Package, RegistryBuilder};
 use cargo_test_support::str;
 use cargo_test_support::{project, publish};
@@ -461,7 +461,6 @@ fn crate_syntax_bad_name() {
    |
 11 |                 "dep:bar" = []
    |                 ^^^^^^^^^
-   |
 
 "#]])
         .run();
@@ -635,6 +634,7 @@ fn json_exposed() {
   ],
   "resolve": null,
   "target_directory": "[ROOT]/foo/target",
+  "build_directory": "[ROOT]/foo/target",
   "version": 1,
   "workspace_default_members": [
     "path+[ROOTURL]/foo#0.1.0"
@@ -930,8 +930,8 @@ fn publish_no_implicit() {
 [PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
 [UPLOADING] foo v0.1.0 ([ROOT]/foo)
 [UPLOADED] foo v0.1.0 to registry `crates-io`
-[NOTE] waiting for foo v0.1.0 to be available at registry `crates-io`.
-You may press ctrl-c to skip waiting; the crate should be available shortly.
+[NOTE] waiting for foo v0.1.0 to be available at registry `crates-io`
+[HELP] you may press ctrl-c to skip waiting; the crate should be available shortly
 [PUBLISHED] foo v0.1.0 at registry `crates-io`
 
 "#]])
@@ -1074,8 +1074,8 @@ fn publish() {
 [FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
 [UPLOADING] foo v0.1.0 ([ROOT]/foo)
 [UPLOADED] foo v0.1.0 to registry `crates-io`
-[NOTE] waiting for foo v0.1.0 to be available at registry `crates-io`.
-You may press ctrl-c to skip waiting; the crate should be available shortly.
+[NOTE] waiting for foo v0.1.0 to be available at registry `crates-io`
+[HELP] you may press ctrl-c to skip waiting; the crate should be available shortly
 [PUBLISHED] foo v0.1.0 at registry `crates-io`
 
 "#]])

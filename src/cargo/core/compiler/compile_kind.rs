@@ -3,7 +3,7 @@
 use crate::core::Target;
 use crate::util::errors::CargoResult;
 use crate::util::interning::InternedString;
-use crate::util::{try_canonicalize, GlobalContext, StableHasher};
+use crate::util::{GlobalContext, StableHasher, try_canonicalize};
 use anyhow::Context as _;
 use serde::Serialize;
 use std::collections::BTreeSet;
@@ -84,15 +84,27 @@ impl CompileKind {
         fallback: CompileKindFallback,
     ) -> CargoResult<Vec<CompileKind>> {
         let dedup = |targets: &[String]| {
-            Ok(targets
+            let deduplicated_targets = targets
                 .iter()
-                .map(|value| Ok(CompileKind::Target(CompileTarget::new(value)?)))
+                .map(|value| {
+                    // This neatly substitutes the manually-specified `host-tuple` target directive
+                    // with the compiling machine's target triple.
+
+                    if value.as_str() == "host-tuple" {
+                        let host_triple = env!("RUST_HOST_TARGET");
+                        Ok(CompileKind::Target(CompileTarget::new(host_triple)?))
+                    } else {
+                        Ok(CompileKind::Target(CompileTarget::new(value.as_str())?))
+                    }
+                })
                 // First collect into a set to deduplicate any `--target` passed
                 // more than once...
                 .collect::<CargoResult<BTreeSet<_>>>()?
                 // ... then generate a flat list for everything else to use.
                 .into_iter()
-                .collect())
+                .collect();
+
+            Ok(deduplicated_targets)
         };
 
         if !targets.is_empty() {
@@ -102,7 +114,7 @@ impl CompileKind {
         let kinds = match (fallback, &gctx.build_config()?.target) {
             (_, None) | (CompileKindFallback::JustHost, _) => Ok(vec![CompileKind::Host]),
             (CompileKindFallback::BuildConfig, Some(build_target_config)) => {
-                dedup(&build_target_config.values(gctx)?)
+                dedup(&build_target_config.values(gctx.cwd())?)
             }
         };
 

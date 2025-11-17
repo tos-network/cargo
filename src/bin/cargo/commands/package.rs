@@ -3,12 +3,13 @@ use crate::command_prelude::*;
 use cargo::ops;
 use cargo::ops::PackageMessageFormat;
 use cargo::ops::PackageOpts;
+use clap_complete::ArgValueCandidates;
 
 pub fn cli() -> Command {
     subcommand("package")
         .about("Assemble the local package into a distributable tarball")
-        .arg_index("Registry index URL to prepare the package for (unstable)")
-        .arg_registry("Registry to prepare the package for (unstable)")
+        .arg_index("Registry index URL to prepare the package for")
+        .arg_registry("Registry to prepare the package for")
         .arg(
             flag(
                 "list",
@@ -44,6 +45,7 @@ pub fn cli() -> Command {
             "Package(s) to assemble",
             "Assemble all packages in the workspace",
             "Don't assemble specified packages",
+            ArgValueCandidates::new(get_ws_member_candidates),
         )
         .arg_features()
         .arg_target_triple("Build for the target triple")
@@ -52,27 +54,11 @@ pub fn cli() -> Command {
         .arg_manifest_path()
         .arg_lockfile_path()
         .after_help(color_print::cstr!(
-            "Run `<cyan,bold>cargo help package</>` for more detailed information.\n"
+            "Run `<bright-cyan,bold>cargo help package</>` for more detailed information.\n"
         ))
 }
 
 pub fn exec(gctx: &mut GlobalContext, args: &ArgMatches) -> CliResult {
-    if args._value_of("registry").is_some() {
-        gctx.cli_unstable().fail_if_stable_opt_custom_z(
-            "--registry",
-            13947,
-            "package-workspace",
-            gctx.cli_unstable().package_workspace,
-        )?;
-    }
-    if args._value_of("index").is_some() {
-        gctx.cli_unstable().fail_if_stable_opt_custom_z(
-            "--index",
-            13947,
-            "package-workspace",
-            gctx.cli_unstable().package_workspace,
-        )?;
-    }
     let reg_or_index = args.registry_or_index(gctx)?;
     let ws = args.workspace(gctx)?;
     if ws.root_maybe().is_embedded() {
@@ -108,6 +94,7 @@ pub fn exec(gctx: &mut GlobalContext, args: &ArgMatches) -> CliResult {
             keep_going: args.keep_going(),
             cli_features: args.cli_features()?,
             reg_or_index,
+            dry_run: false,
         },
     )?;
 

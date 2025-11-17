@@ -36,7 +36,8 @@ _cargo()
 	local opt_verbose='-v --verbose'
 	local opt_quiet='-q --quiet'
 	local opt_color='--color'
-	local opt_common="$opt_help $opt_verbose $opt_quiet $opt_color"
+	local opt_config='--config'
+	local opt_common="$opt_help $opt_verbose $opt_quiet $opt_color $opt_config"
 	local opt_pkg_spec='-p --package --all --exclude --workspace'
 	local opt_pkg='-p --package'
 	local opt_feat='-F --features --all-features --no-default-features'
@@ -73,7 +74,7 @@ _cargo()
 	local opt__owner="$opt_common $opt_lock -a --add -r --remove -l --list --index --token --registry"
 	local opt__package="$opt_common $opt_mani $opt_feat $opt_lock $opt_parallel --allow-dirty -l --list --no-verify --no-metadata --index --registry --target --target-dir"
 	local opt__pkgid="$opt_common $opt_mani $opt_lock $opt_pkg"
-	local opt__publish="$opt_common $opt_mani $opt_feat $opt_lock $opt_parallel --allow-dirty --dry-run --token --no-verify --index --registry --target --target-dir"
+	local opt__publish="$opt_common $opt_mani $opt_feat $opt_lock $opt_parallel --allow-dirty --dry-run --no-verify --index --registry --target --target-dir"
 	local opt__remove="$opt_common $opt_pkg $opt_lock $opt_mani --dry-run --dev --build --target"
 	local opt__rm="$opt__remove"
 	local opt__report="$opt_help $opt_verbose $opt_color future-incompat future-incompatibilities"
@@ -91,7 +92,7 @@ _cargo()
 	local opt__vendor="$opt_common $opt_mani $opt_lock $opt_sync --no-delete --respect-source-config --versioned-dirs"
 	local opt__version="$opt_common $opt_lock"
 	local opt__yank="$opt_common $opt_lock --version --undo --index --token --registry"
-	local opt__libtest="--help --include-ignored --ignored --test --bench --list --logfile --nocapture --test-threads --skip -q --quiet --exact --color --format"
+	local opt__libtest="--help --include-ignored --ignored --test --bench --list --logfile --no-capture --test-threads --skip -q --quiet --exact --color --format"
 
 	if [[ $cword -gt $dd_i ]]; then
 		# Completion after -- separator.
@@ -142,6 +143,9 @@ _cargo()
 				;;
 			--target-dir|--path)
 				_filedir -d
+				;;
+			--config)
+				_filedir
 				;;
 			help)
 				_ensure_cargo_commands_cache_filled

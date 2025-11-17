@@ -11,8 +11,9 @@ use std::io::Seek;
 use std::io::SeekFrom;
 use std::time::Duration;
 
-use anyhow::bail;
+use annotate_snippets::Level;
 use anyhow::Context as _;
+use anyhow::bail;
 use cargo_credential::Operation;
 use cargo_credential::Secret;
 use cargo_util::paths;
@@ -21,35 +22,36 @@ use crates_io::NewCrateDependency;
 use crates_io::Registry;
 use itertools::Itertools;
 
-use crate::core::dependency::DepKind;
-use crate::core::manifest::ManifestMetadata;
-use crate::core::resolver::CliFeatures;
+use crate::CargoResult;
+use crate::GlobalContext;
 use crate::core::Dependency;
 use crate::core::Package;
 use crate::core::PackageId;
 use crate::core::PackageIdSpecQuery;
 use crate::core::SourceId;
 use crate::core::Workspace;
+use crate::core::dependency::DepKind;
+use crate::core::manifest::ManifestMetadata;
+use crate::core::resolver::CliFeatures;
 use crate::ops;
-use crate::ops::registry::RegistrySourceIds;
 use crate::ops::PackageOpts;
 use crate::ops::Packages;
 use crate::ops::RegistryOrIndex;
-use crate::sources::source::QueryKind;
-use crate::sources::source::Source;
+use crate::ops::registry::RegistrySourceIds;
+use crate::sources::CRATES_IO_REGISTRY;
 use crate::sources::RegistrySource;
 use crate::sources::SourceConfigMap;
-use crate::sources::CRATES_IO_REGISTRY;
-use crate::util::auth;
-use crate::util::cache_lock::CacheLockMode;
-use crate::util::context::JobsConfig;
-use crate::util::toml::prepare_for_publish;
+use crate::sources::source::QueryKind;
+use crate::sources::source::Source;
 use crate::util::Graph;
 use crate::util::Progress;
 use crate::util::ProgressStyle;
 use crate::util::VersionExt as _;
-use crate::CargoResult;
-use crate::GlobalContext;
+use crate::util::auth;
+use crate::util::cache_lock::CacheLockMode;
+use crate::util::context::JobsConfig;
+use crate::util::errors::ManifestError;
+use crate::util::toml::prepare_for_publish;
 
 use super::super::check_dep_has_version;
 
@@ -68,17 +70,7 @@ pub struct PublishOpts<'gctx> {
 }
 
 pub fn publish(ws: &Workspace<'_>, opts: &PublishOpts<'_>) -> CargoResult<()> {
-    let multi_package_mode = ws.gctx().cli_unstable().package_workspace;
     let specs = opts.to_publish.to_package_id_specs(ws)?;
-
-    if !multi_package_mode {
-        if specs.len() > 1 {
-            bail!("the `-p` argument must be specified to select a single package to publish")
-        }
-        if Packages::Default == opts.to_publish && ws.is_virtual() {
-            bail!("the `-p` argument must be specified in the root of a virtual workspace")
-        }
-    }
 
     let member_ids: Vec<_> = ws.members().map(|p| p.package_id()).collect();
     // Check that the specs match members.
@@ -96,13 +88,12 @@ pub fn publish(ws: &Workspace<'_>, opts: &PublishOpts<'_>) -> CargoResult<()> {
     // If `--workspace` is passed,
     // the intent is more like "publish all publisable packages in this workspace",
     // so skip `publish=false` packages.
-    let allow_unpublishable = multi_package_mode
-        && match &opts.to_publish {
-            Packages::Default => ws.is_virtual(),
-            Packages::All(_) => true,
-            Packages::OptOut(_) => true,
-            Packages::Packages(_) => false,
-        };
+    let allow_unpublishable = match &opts.to_publish {
+        Packages::Default => ws.is_virtual(),
+        Packages::All(_) => true,
+        Packages::OptOut(_) => true,
+        Packages::Packages(_) => false,
+    };
     if !unpublishable.is_empty() && !allow_unpublishable {
         bail!(
             "{} cannot be published.\n\
@@ -118,12 +109,16 @@ pub fn publish(ws: &Workspace<'_>, opts: &PublishOpts<'_>) -> CargoResult<()> {
         if allow_unpublishable {
             let n = unpublishable.len();
             let plural = if n == 1 { "" } else { "s" };
-            ws.gctx().shell().warn(format_args!(
-                "nothing to publish, but found {n} unpublishable package{plural}"
-            ))?;
-            ws.gctx().shell().note(format_args!(
-                "to publish packages, set `package.publish` to `true` or a non-empty list"
-            ))?;
+            ws.gctx().shell().print_report(
+                &[Level::WARNING
+                    .secondary_title(format!(
+                        "nothing to publish, but found {n} unpublishable package{plural}"
+                    ))
+                    .element(Level::HELP.message(
+                        "to publish packages, set `package.publish` to `true` or a non-empty list",
+                    ))],
+                false,
+            )?;
             return Ok(());
         } else {
             unreachable!("must have at least one publishable package");
@@ -139,7 +134,7 @@ pub fn publish(ws: &Workspace<'_>, opts: &PublishOpts<'_>) -> CargoResult<()> {
         None => {
             let reg = super::infer_registry(&just_pkgs)?;
             validate_registry(&just_pkgs, reg.as_ref())?;
-            if let Some(RegistryOrIndex::Registry(ref registry)) = &reg {
+            if let Some(RegistryOrIndex::Registry(registry)) = &reg {
                 if registry != CRATES_IO_REGISTRY {
                     // Don't warn for crates.io.
                     opts.gctx.shell().note(&format!(
@@ -171,7 +166,15 @@ pub fn publish(ws: &Workspace<'_>, opts: &PublishOpts<'_>) -> CargoResult<()> {
 
         for (pkg, _) in &pkgs {
             verify_unpublished(pkg, &mut source, &source_ids, opts.dry_run, opts.gctx)?;
-            verify_dependencies(pkg, &registry, source_ids.original)?;
+            verify_dependencies(pkg, &registry, source_ids.original).map_err(|err| {
+                ManifestError::new(
+                    err.context(format!(
+                        "failed to verify manifest at `{}`",
+                        pkg.manifest_path().display()
+                    )),
+                    pkg.manifest_path().into(),
+                )
+            })?;
         }
     }
 
@@ -193,6 +196,7 @@ pub fn publish(ws: &Workspace<'_>, opts: &PublishOpts<'_>) -> CargoResult<()> {
             keep_going: opts.keep_going,
             cli_features: opts.cli_features.clone(),
             reg_or_index: reg_or_index.clone(),
+            dry_run: opts.dry_run,
         },
         pkgs,
     )?;
@@ -211,7 +215,8 @@ pub fn publish(ws: &Workspace<'_>, opts: &PublishOpts<'_>) -> CargoResult<()> {
         // `b`, and we uploaded `a` and `b` but only confirmed `a`, then on
         // the following pass through the outer loop nothing will be ready for
         // upload.
-        for pkg_id in plan.take_ready() {
+        let mut ready = plan.take_ready();
+        while let Some(pkg_id) = ready.pop_first() {
             let (pkg, (_features, tarball)) = &pkg_dep_graph.packages[&pkg_id];
             opts.gctx.shell().status("Uploading", pkg.package_id())?;
 
@@ -237,6 +242,19 @@ pub fn publish(ws: &Workspace<'_>, opts: &PublishOpts<'_>) -> CargoResult<()> {
                 )?));
             }
 
+            let workspace_context = || {
+                let mut remaining = ready.clone();
+                remaining.extend(plan.iter());
+                if !remaining.is_empty() {
+                    format!(
+                        "\n\nnote: the following crates have not been published yet:\n  {}",
+                        remaining.into_iter().join("\n  ")
+                    )
+                } else {
+                    String::new()
+                }
+            };
+
             transmit(
                 opts.gctx,
                 ws,
@@ -245,6 +263,7 @@ pub fn publish(ws: &Workspace<'_>, opts: &PublishOpts<'_>) -> CargoResult<()> {
                 &mut registry,
                 source_ids.original,
                 opts.dry_run,
+                workspace_context,
             )?;
             to_confirm.insert(pkg_id);
 
@@ -273,11 +292,18 @@ pub fn publish(ws: &Workspace<'_>, opts: &PublishOpts<'_>) -> CargoResult<()> {
                 let source_description = source.source_id().to_string();
                 let short_pkg_descriptions = package_list(to_confirm.iter().copied(), "or");
                 if plan.is_empty() {
-                    opts.gctx.shell().note(format!(
-                    "waiting for {short_pkg_descriptions} to be available at {source_description}.\n\
-                    You may press ctrl-c to skip waiting; the {crate} should be available shortly.",
-                    crate = if to_confirm.len() == 1 { "crate" } else {"crates"}
-                ))?;
+                    let report = &[
+                        annotate_snippets::Group::with_title(
+                        annotate_snippets::Level::NOTE
+                            .secondary_title(format!(
+                                "waiting for {short_pkg_descriptions} to be available at {source_description}"
+                            ))),
+                            annotate_snippets::Group::with_title(annotate_snippets::Level::HELP.secondary_title(format!(
+                                "you may press ctrl-c to skip waiting; the {crate} should be available shortly",
+                                crate = if to_confirm.len() == 1 { "crate" } else {"crates"}
+                            ))),
+                    ];
+                    opts.gctx.shell().print_report(report, false)?;
                 } else {
                     opts.gctx.shell().note(format!(
                     "waiting for {short_pkg_descriptions} to be available at {source_description}.\n\
@@ -302,18 +328,23 @@ pub fn publish(ws: &Workspace<'_>, opts: &PublishOpts<'_>) -> CargoResult<()> {
                     )?;
                 } else {
                     let short_pkg_descriptions = package_list(to_confirm.iter().copied(), "or");
-                    opts.gctx.shell().warn(format!(
-                        "timed out waiting for {short_pkg_descriptions} to be available in {source_description}",
-                    ))?;
-                    opts.gctx.shell().note(format!(
-                        "the registry may have a backlog that is delaying making the \
-                        {crate} available. The {crate} should be available soon.",
-                        crate = if to_confirm.len() == 1 {
-                            "crate"
-                        } else {
-                            "crates"
-                        }
-                    ))?;
+                    let krate = if to_confirm.len() == 1 {
+                        "crate"
+                    } else {
+                        "crates"
+                    };
+                    opts.gctx.shell().print_report(
+                        &[Level::WARNING
+                            .secondary_title(format!(
+                                "timed out waiting for {short_pkg_descriptions} \
+                                    to be available in {source_description}",
+                            ))
+                            .element(Level::NOTE.message(format!(
+                                "the registry may have a backlog that is delaying making the \
+                                {krate} available. The {krate} should be available soon.",
+                            )))],
+                        false,
+                    )?;
                 }
                 confirmed
             } else {
@@ -329,7 +360,9 @@ pub fn publish(ws: &Workspace<'_>, opts: &PublishOpts<'_>) -> CargoResult<()> {
                 break;
             } else {
                 let failed_list = package_list(plan.iter(), "and");
-                bail!("unable to publish {failed_list} due to a timeout while waiting for published dependencies to be available.");
+                bail!(
+                    "unable to publish {failed_list} due to a timeout while waiting for published dependencies to be available."
+                );
             }
         }
         for id in &confirmed {
@@ -484,12 +517,14 @@ fn verify_dependencies(
             // but also prevents someone using `--index` to specify
             // something that points to crates.io.
             if registry_src.is_crates_io() || registry.host_is_crates_io() {
-                bail!("crates cannot be published to crates.io with dependencies sourced from other\n\
+                bail!(
+                    "crates cannot be published to crates.io with dependencies sourced from other\n\
                        registries. `{}` needs to be published to crates.io before publishing this crate.\n\
                        (crate `{}` is pulled from {})",
-                      dep.package_name(),
-                      dep.package_name(),
-                      dep.source_id());
+                    dep.package_name(),
+                    dep.package_name(),
+                    dep.source_id()
+                );
             }
         }
     }
@@ -629,6 +664,7 @@ fn transmit(
     registry: &mut Registry,
     registry_id: SourceId,
     dry_run: bool,
+    workspace_context: impl Fn() -> String,
 ) -> CargoResult<()> {
     let new_crate = prepare_transmit(gctx, ws, pkg, registry_id)?;
 
@@ -638,31 +674,50 @@ fn transmit(
         return Ok(());
     }
 
-    let warnings = registry
-        .publish(&new_crate, tarball)
-        .with_context(|| format!("failed to publish to registry at {}", registry.host()))?;
+    let warnings = registry.publish(&new_crate, tarball).with_context(|| {
+        format!(
+            "failed to publish {} v{} to registry at {}{}",
+            pkg.name(),
+            pkg.version(),
+            registry.host(),
+            workspace_context()
+        )
+    })?;
 
     if !warnings.invalid_categories.is_empty() {
         let msg = format!(
-            "the following are not valid category slugs and were \
-             ignored: {}. Please see https://crates.io/category_slugs \
-             for the list of all category slugs. \
-             ",
+            "the following are not valid category slugs and were ignored: {}",
             warnings.invalid_categories.join(", ")
         );
-        gctx.shell().warn(&msg)?;
+        gctx.shell().print_report(
+            &[Level::WARNING
+                .secondary_title(msg)
+                .element(Level::HELP.message(
+                "please see <https://crates.io/category_slugs> for the list of all category slugs",
+            ))],
+            false,
+        )?;
     }
 
     if !warnings.invalid_badges.is_empty() {
         let msg = format!(
-            "the following are not valid badges and were ignored: {}. \
-             Either the badge type specified is unknown or a required \
-             attribute is missing. Please see \
-             https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata \
-             for valid badge types and their required attributes.",
+            "the following are not valid badges and were ignored: {}",
             warnings.invalid_badges.join(", ")
         );
-        gctx.shell().warn(&msg)?;
+        gctx.shell().print_report(
+            &[Level::WARNING.secondary_title(msg).elements([
+                Level::NOTE.message(
+                    "either the badge type specified is unknown or a required \
+                    attribute is missing",
+                ),
+                Level::HELP.message(
+                    "please see \
+                    <https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata> \
+                    for valid badge types and their required attributes",
+                ),
+            ])],
+            false,
+        )?;
     }
 
     if !warnings.other.is_empty() {

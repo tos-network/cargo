@@ -35,7 +35,6 @@ pub fn cli() -> Command {
         .arg_target_triple("Build for the target triple")
         .arg_target_dir()
         .arg_artifact_dir()
-        .arg_build_plan()
         .arg_unit_graph()
         .arg_timings()
         .arg_compile_time_deps()
@@ -43,7 +42,7 @@ pub fn cli() -> Command {
         .arg_lockfile_path()
         .arg_ignore_rust_version()
         .after_help(color_print::cstr!(
-            "Run `<cyan,bold>cargo help build</>` for more detailed information.\n"
+            "Run `<bright-cyan,bold>cargo help build</>` for more detailed information.\n"
         ))
 }
 

@@ -1,10 +1,11 @@
 //! Tests for the `cargo tree` command.
 
-use cargo_test_support::cross_compile::{self, alternate};
-use cargo_test_support::prelude::*;
+use crate::prelude::*;
+use crate::utils::cross_compile::disabled as cross_compile_disabled;
+use cargo_test_support::cross_compile::alternate;
 use cargo_test_support::registry::{Dependency, Package};
 use cargo_test_support::str;
-use cargo_test_support::{basic_manifest, git, project, rustc_host, Project};
+use cargo_test_support::{Project, basic_manifest, git, project, rustc_host};
 
 use crate::features2::switch_to_resolver_2;
 
@@ -352,7 +353,7 @@ a v0.1.0 ([ROOT]/foo)
 #[cargo_test]
 fn filters_target() {
     // --target flag
-    if cross_compile::disabled() {
+    if cross_compile_disabled() {
         return;
     }
     Package::new("targetdep", "1.0.0").publish();
@@ -481,7 +482,7 @@ foo v0.1.0 ([ROOT]/foo)
 #[cargo_test]
 fn no_selected_target_dependency() {
     // --target flag
-    if cross_compile::disabled() {
+    if cross_compile_disabled() {
         return;
     }
     Package::new("targetdep", "1.0.0").publish();
@@ -1008,7 +1009,7 @@ cat v2.0.0
 #[cargo_test]
 fn duplicates_with_target() {
     // --target flag
-    if cross_compile::disabled() {
+    if cross_compile_disabled() {
         return;
     }
     Package::new("a", "1.0.0").publish();
@@ -1902,7 +1903,7 @@ c v0.1.0 ([ROOT]/foo/c) (*)
 }
 
 #[cargo_test(nightly, reason = "exported_private_dependencies lint is unstable")]
-fn depth_public() {
+fn edge_public() {
     let p = project()
         .file(
             "Cargo.toml",
@@ -1963,18 +1964,18 @@ fn depth_public() {
         .file("dep/src/lib.rs", "")
         .build();
 
-    p.cargo("tree --depth public")
-        .masquerade_as_nightly_cargo(&["public-dependency", "depth-public"])
+    p.cargo("tree --edges public")
+        .masquerade_as_nightly_cargo(&["public-dependency", "edge-public"])
         .with_status(101)
         .with_stderr_data(str![[r#"
-[ERROR] `--depth public` requires `-Zunstable-options`
+[ERROR] `--edges public` requires `-Zunstable-options`
 
 "#]])
         .run();
 
-    p.cargo("tree --depth public -p left-pub")
+    p.cargo("tree --edges public -p left-pub")
         .arg("-Zunstable-options")
-        .masquerade_as_nightly_cargo(&["public-dependency", "depth-public"])
+        .masquerade_as_nightly_cargo(&["public-dependency", "edge-public"])
         .with_stdout_data(str![[r#"
 left-pub v0.1.0 ([ROOT]/foo/left-pub)
 └── dep v0.1.0 ([ROOT]/foo/dep)
@@ -1982,18 +1983,18 @@ left-pub v0.1.0 ([ROOT]/foo/left-pub)
 "#]])
         .run();
 
-    p.cargo("tree --depth public -p right-priv")
+    p.cargo("tree --edges public -p right-priv")
         .arg("-Zunstable-options")
-        .masquerade_as_nightly_cargo(&["public-dependency", "depth-public"])
+        .masquerade_as_nightly_cargo(&["public-dependency", "edge-public"])
         .with_stdout_data(str![[r#"
 right-priv v0.1.0 ([ROOT]/foo/right-priv)
 
 "#]])
         .run();
 
-    p.cargo("tree --depth public -p diamond")
+    p.cargo("tree --edges public -p diamond")
         .arg("-Zunstable-options")
-        .masquerade_as_nightly_cargo(&["public-dependency", "depth-public"])
+        .masquerade_as_nightly_cargo(&["public-dependency", "edge-public"])
         .with_stdout_data(str![[r#"
 diamond v0.1.0 ([ROOT]/foo/diamond)
 ├── left-pub v0.1.0 ([ROOT]/foo/left-pub)
@@ -2003,9 +2004,9 @@ diamond v0.1.0 ([ROOT]/foo/diamond)
 "#]])
         .run();
 
-    p.cargo("tree --depth public")
+    p.cargo("tree --edges public")
         .arg("-Zunstable-options")
-        .masquerade_as_nightly_cargo(&["public-dependency", "depth-public"])
+        .masquerade_as_nightly_cargo(&["public-dependency", "edge-public"])
         .with_stdout_data(str![[r#"
 dep v0.1.0 ([ROOT]/foo/dep)
 
@@ -2016,14 +2017,14 @@ diamond v0.1.0 ([ROOT]/foo/diamond)
 
 left-pub v0.1.0 ([ROOT]/foo/left-pub) (*)
 
-right-priv v0.1.0 ([ROOT]/foo/right-priv) (*)
+right-priv v0.1.0 ([ROOT]/foo/right-priv)
 
 "#]])
         .run();
 
-    p.cargo("tree --depth public --invert dep")
+    p.cargo("tree --edges public --invert dep")
         .arg("-Zunstable-options")
-        .masquerade_as_nightly_cargo(&["public-dependency", "depth-public"])
+        .masquerade_as_nightly_cargo(&["public-dependency", "edge-public"])
         .with_stdout_data(str![[r#"
 dep v0.1.0 ([ROOT]/foo/dep)
 └── left-pub v0.1.0 ([ROOT]/foo/left-pub)
@@ -2313,6 +2314,54 @@ foo v1.0.0 ([ROOT]/foo)
         │   [dev-dependencies]
         │   └── foo v1.0.0 ([ROOT]/foo) (*)
         └── bar feature "feat1" (command-line) (*)
+
+"#]])
+        .run();
+}
+
+#[cargo_test]
+fn no_proc_macro_order() {
+    Package::new("dep", "1.0.0").publish();
+    Package::new("pm", "1.0.0").proc_macro(true).publish();
+    let p = project()
+        .file(
+            "Cargo.toml",
+            r#"
+            [package]
+            name = "foo"
+            version = "0.1.0"
+
+            [dependencies]
+            pm = "1.0"
+            dep = "1.0"
+            "#,
+        )
+        .file("src/lib.rs", "")
+        .build();
+
+    p.cargo("tree")
+        .with_stdout_data(str![[r#"
+foo v0.1.0 ([ROOT]/foo)
+├── dep v1.0.0
+└── pm v1.0.0 (proc-macro)
+
+"#]])
+        .run();
+
+    // no-proc-macro combined with other edge kinds
+    p.cargo("tree -e normal,no-proc-macro")
+        .with_stdout_data(str![[r#"
+foo v0.1.0 ([ROOT]/foo)
+└── dep v1.0.0
+
+"#]])
+        .run();
+
+    // change flag order, expecting the same output
+    p.cargo("tree -e no-proc-macro,normal")
+        .with_stdout_data(str![[r#"
+foo v0.1.0 ([ROOT]/foo)
+└── dep v1.0.0
 
 "#]])
         .run();

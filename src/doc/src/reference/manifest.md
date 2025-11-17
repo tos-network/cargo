@@ -50,6 +50,7 @@ Every manifest file consists of the following sections:
 * [`[badges]`](#the-badges-section) --- Badges to display on a registry.
 * [`[features]`](features.md) --- Conditional compilation features.
 * [`[lints]`](#the-lints-section) --- Configure linters for this package.
+* [`[hints]`](#the-hints-section) --- Provide hints for compiling this package.
 * [`[patch]`](overriding-dependencies.md#the-patch-section) --- Override dependencies.
 * [`[replace]`](overriding-dependencies.md#the-replace-section) --- Override dependencies (deprecated).
 * [`[profile]`](profiles.md) --- Compiler settings and optimizations.
@@ -565,6 +566,26 @@ As for dependents, Cargo suppresses lints from non-path dependencies with featur
 
 > **MSRV:** Respected as of 1.74
 
+## The `[hints]` section
+
+The `[hints]` section allows specifying hints for compiling this package. Cargo
+will respect these hints by default when compiling this package, though the
+top-level package being built can override these values through the `[profile]`
+mechanism. Hints are, by design, always safe for Cargo to ignore; if Cargo
+encounters a hint it doesn't understand, or a hint it understands but with a
+value it doesn't understand, it will warn, but not error. As a result,
+specifying hints in a crate does not impact the MSRV of the crate.
+
+Individual hints may have an associated unstable feature gate that you need to
+pass in order to apply the configuration they specify, but if you don't specify
+that unstable feature gate, you will again get only a warning, not an error.
+
+There are no stable hints at this time. See the [hint-mostly-unused
+documentation](unstable.md#profile-hint-mostly-unused-option) for information
+on an unstable hint.
+
+> **MSRV:** Respected as of 1.90.
+
 ## The `[badges]` section
 
 The `[badges]` section is for specifying status badges that can be displayed
@@ -626,46 +647,3 @@ more detail.
 [spdx-license-list-3.20]: https://github.com/spdx/license-list-data/tree/v3.20
 [SPDX site]: https://spdx.org
 [TOML]: https://toml.io/
-
-<script>
-(function() {
-    var fragments = {
-        "#the-project-layout": "../guide/project-layout.html",
-        "#examples": "cargo-targets.html#examples",
-        "#tests": "cargo-targets.html#tests",
-        "#integration-tests": "cargo-targets.html#integration-tests",
-        "#configuring-a-target": "cargo-targets.html#configuring-a-target",
-        "#target-auto-discovery": "cargo-targets.html#target-auto-discovery",
-        "#the-required-features-field-optional": "cargo-targets.html#the-required-features-field",
-        "#building-dynamic-or-static-libraries": "cargo-targets.html#the-crate-type-field",
-        "#the-workspace-section": "workspaces.html#the-workspace-section",
-        "#virtual-workspace": "workspaces.html",
-        "#package-selection": "workspaces.html#package-selection",
-        "#the-features-section": "features.html#the-features-section",
-        "#rules": "features.html",
-        "#usage-in-end-products": "features.html",
-        "#usage-in-packages": "features.html",
-        "#the-patch-section": "overriding-dependencies.html#the-patch-section",
-        "#using-patch-with-multiple-versions": "overriding-dependencies.html#using-patch-with-multiple-versions",
-        "#the-replace-section": "overriding-dependencies.html#the-replace-section",
-        "#package-metadata": "manifest.html#the-package-section",
-        "#the-authors-field-optional": "manifest.html#the-authors-field",
-        "#the-edition-field-optional": "manifest.html#the-edition-field",
-        "#the-documentation-field-optional": "manifest.html#the-documentation-field",
-        "#the-workspace--field-optional": "manifest.html#the-workspace-field",
-        "#package-build": "manifest.html#the-build-field",
-        "#the-build-field-optional": "manifest.html#the-build-field",
-        "#the-links-field-optional": "manifest.html#the-links-field",
-        "#the-exclude-and-include-fields-optional": "manifest.html#the-exclude-and-include-fields",
-        "#the-publish--field-optional": "manifest.html#the-publish-field",
-        "#the-metadata-table-optional": "manifest.html#the-metadata-table",
-        "#rust-version": "rust-version.html",
-    };
-    var target = fragments[window.location.hash];
-    if (target) {
-        var url = window.location.toString();
-        var base = url.substring(0, url.lastIndexOf('/'));
-        window.location.replace(base + "/" + target);
-    }
-})();
-</script>

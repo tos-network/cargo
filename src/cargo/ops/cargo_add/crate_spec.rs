@@ -3,8 +3,8 @@
 use anyhow::Context as _;
 
 use super::Dependency;
-use crate::util::toml_mut::dependency::RegistrySource;
 use crate::CargoResult;
+use crate::util::toml_mut::dependency::RegistrySource;
 use cargo_util_schemas::manifest::PackageName;
 
 /// User-specified crate
@@ -31,7 +31,7 @@ impl CrateSpec {
         let package_name = PackageName::new(name);
         if !pkg_id.contains("@") && package_name.is_err() {
             for (idx, ch) in pkg_id.char_indices() {
-                if !(unicode_xid::UnicodeXID::is_xid_continue(ch) || ch == '-') {
+                if !(unicode_ident::is_xid_continue(ch) || ch == '-') {
                     let mut suggested_pkg_id = pkg_id.to_string();
                     suggested_pkg_id.insert_str(idx, "@");
                     if let Ok(_) = CrateSpec::resolve(&suggested_pkg_id.as_str()) {

@@ -37,6 +37,16 @@ label = "O-windows"
 # Documentation at: https://forge.rust-lang.org/triagebot/note.html
 [note]
 
+# Enable comments linking to triagebot range-diff when a PR is rebased
+# onto a different base commit
+# Documentation at: https://forge.rust-lang.org/triagebot/range-diff.html
+[range-diff]
+
+# Adds at the end of a review body a link to view the changes that happened
+# since the review
+# Documentation at: https://forge.rust-lang.org/triagebot/review-changes-since.html
+[review-changes-since]
+
 [merge-conflicts]
 remove = []
 add = ["S-waiting-on-author"]
@@ -51,7 +61,6 @@ warn_non_default_branch = true
 
 [assign.owners]
 "*" = ["@ehuss", "@epage", "@weihanglo"]
-
 
 [review-submitted]
 reviewed_label = "S-waiting-on-author"
@@ -105,7 +114,6 @@ trigger_files = ["src/cargo/util/context/mod.rs"]
 [autolabel."A-console-output"]
 trigger_files = [
   "src/cargo/core/shell.rs",
-  "src/cargo/util/machine_message.rs",
   "src/cargo/util/progress.rs",
 ]
 
@@ -170,6 +178,9 @@ trigger_files = [
 
 [autolabel."A-interacts-with-crates.io"]
 trigger_files = ["crates/crates-io/", "src/cargo/ops/registry/"]
+
+[autolabel."A-json-output"]
+trigger_files = ["src/cargo/util/machine_message.rs"]
 
 [autolabel."A-layout"]
 trigger_files = [

@@ -1,11 +1,13 @@
 use crate::cli;
 use crate::command_prelude::*;
+use annotate_snippets::Level;
 use anyhow::{bail, format_err};
 use cargo::core::dependency::DepKind;
-use cargo::ops::tree::{self, DisplayDepth, EdgeKind};
 use cargo::ops::Packages;
-use cargo::util::print_available_packages;
+use cargo::ops::tree::{self, DisplayDepth, EdgeKind};
 use cargo::util::CargoResult;
+use cargo::util::print_available_packages;
+use clap_complete::ArgValueCandidates;
 use std::collections::HashSet;
 use std::str::FromStr;
 
@@ -35,7 +37,10 @@ pub fn cli() -> Command {
                 "SPEC",
                 "Invert the tree direction and focus on the given package",
             )
-            .short('i'),
+            .short('i')
+            .add(clap_complete::ArgValueCandidates::new(
+                get_pkg_id_spec_candidates,
+            )),
         )
         .arg(multi_opt(
             "prune",
@@ -87,6 +92,7 @@ pub fn cli() -> Command {
             "Package to be used as the root of the tree",
             "Display the tree for all packages in the workspace",
             "Exclude specific workspace members",
+            ArgValueCandidates::new(get_pkg_id_spec_candidates),
         )
         .arg_features()
         .arg(flag("all-targets", "Deprecated, use --target=all instead").hide(true))
@@ -97,7 +103,7 @@ pub fn cli() -> Command {
         .arg_manifest_path()
         .arg_lockfile_path()
         .after_help(color_print::cstr!(
-            "Run `<cyan,bold>cargo help tree</>` for more detailed information.\n"
+            "Run `<bright-cyan,bold>cargo help tree</>` for more detailed information.\n"
         ))
 }
 
@@ -141,10 +147,16 @@ pub fn exec(gctx: &mut GlobalContext, args: &ArgMatches) -> CliResult {
 
     let no_dedupe = args.flag("no-dedupe") || args.flag("all");
     if args.flag("all") {
-        gctx.shell().warn(
-            "The `cargo tree` --all flag has been changed to --no-dedupe, \
-             and may be removed in a future version.\n\
-             If you are looking to display all workspace members, use the --workspace flag.",
+        gctx.shell().print_report(
+            &[Level::WARNING
+                .secondary_title(
+                    "the `cargo tree` --all flag has been changed to --no-dedupe, \
+                    and may be removed in a future version",
+                )
+                .element(Level::HELP.message(
+                    "if you are looking to display all workspace members, use the --workspace flag",
+                ))],
+            false,
         )?;
     }
 
@@ -157,7 +169,7 @@ pub fn exec(gctx: &mut GlobalContext, args: &ArgMatches) -> CliResult {
     };
     let target = tree::Target::from_cli(targets);
 
-    let (edge_kinds, no_proc_macro) = parse_edge_kinds(gctx, args)?;
+    let (edge_kinds, no_proc_macro, public) = parse_edge_kinds(gctx, args)?;
     let graph_features = edge_kinds.contains(&EdgeKind::Feature);
 
     let pkgs_to_prune = args._values_of("prune");
@@ -230,6 +242,7 @@ subtree of the package given to -p.\n\
         graph_features,
         display_depth,
         no_proc_macro,
+        public,
     };
 
     if opts.graph_features && opts.duplicates {
@@ -246,16 +259,24 @@ subtree of the package given to -p.\n\
 fn parse_edge_kinds(
     gctx: &GlobalContext,
     args: &ArgMatches,
-) -> CargoResult<(HashSet<EdgeKind>, bool)> {
-    let (kinds, no_proc_macro) = {
+) -> CargoResult<(HashSet<EdgeKind>, bool, bool)> {
+    let (kinds, no_proc_macro, public) = {
         let mut no_proc_macro = false;
+        let mut public = false;
         let mut kinds = args.get_many::<String>("edges").map_or_else(
             || Vec::new(),
             |es| {
                 es.flat_map(|e| e.split(','))
                     .filter(|e| {
-                        no_proc_macro = *e == "no-proc-macro";
-                        !no_proc_macro
+                        if *e == "no-proc-macro" {
+                            no_proc_macro = true;
+                            false
+                        } else if *e == "public" {
+                            public = true;
+                            false
+                        } else {
+                            true
+                        }
                     })
                     .collect()
             },
@@ -271,7 +292,11 @@ fn parse_edge_kinds(
             kinds.extend(&["normal", "build", "dev"]);
         }
 
-        (kinds, no_proc_macro)
+        if public && !gctx.cli_unstable().unstable_options {
+            anyhow::bail!("`--edges public` requires `-Zunstable-options`");
+        }
+
+        (kinds, no_proc_macro, public)
     };
 
     let mut result = HashSet::new();
@@ -308,7 +333,7 @@ fn parse_edge_kinds(
                 k => return unknown(k),
             };
         }
-        return Ok((result, no_proc_macro));
+        return Ok((result, no_proc_macro, public));
     }
     for kind in &kinds {
         match *kind {
@@ -334,5 +359,5 @@ fn parse_edge_kinds(
     if kinds.len() == 1 && kinds[0] == "features" {
         insert_defaults(&mut result);
     }
-    Ok((result, no_proc_macro))
+    Ok((result, no_proc_macro, public))
 }

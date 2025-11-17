@@ -1,8 +1,9 @@
 //! Tests for credential-process.
 
-use cargo_test_support::prelude::*;
+use crate::prelude::*;
+use crate::utils::cargo_process;
 use cargo_test_support::registry::{Package, TestRegistry};
-use cargo_test_support::{basic_manifest, cargo_process, paths, project, registry, str, Project};
+use cargo_test_support::{Project, basic_manifest, paths, project, registry, str};
 
 fn toml_bin(proj: &Project, name: &str) -> String {
     proj.bin(name).display().to_string().replace('\\', "\\\\")
@@ -79,8 +80,8 @@ fn publish() {
 [UPLOADING] foo v0.1.0 ([ROOT]/foo)
 {"v":1,"registry":{"index-url":"[..]","name":"alternative"},"kind":"get","operation":"publish","name":"foo","vers":"0.1.0","cksum":"[..]"}
 [UPLOADED] foo v0.1.0 to registry `alternative`
-[NOTE] waiting for foo v0.1.0 to be available at registry `alternative`.
-You may press ctrl-c [..]
+[NOTE] waiting for foo v0.1.0 to be available at registry `alternative`
+[HELP] you may press ctrl-c to skip waiting; the crate should be available shortly
 [PUBLISHED] foo v0.1.0 at registry `alternative`
 
 "#]])
@@ -554,7 +555,8 @@ fn token_caching() {
         .file("src/lib.rs", "")
         .build();
 
-    let output = r#"[UPDATING] `alternative` index
+    let output = str![[r#"
+[UPDATING] `alternative` index
 {"v":1,"registry":{"index-url":"[..]","name":"alternative"},"kind":"get","operation":"read"}
 [PACKAGING] foo v0.1.0 ([ROOT]/foo)
 [PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
@@ -562,9 +564,10 @@ fn token_caching() {
 {"v":1,"registry":{"index-url":"[..]","name":"alternative"},"kind":"get","operation":"publish","name":"foo","vers":"0.1.0","cksum":"[..]"}
 [UPLOADED] foo v0.1.0 to registry `alternative`
 [NOTE] waiting [..]
-You may press ctrl-c [..]
+[HELP] you may press ctrl-c to skip waiting; the crate should be available shortly
 [PUBLISHED] foo v0.1.0 at registry `alternative`
-"#;
+
+"#]];
 
     // The output should contain two JSON messages from the provider in both cases:
     // The first because the credential is expired, the second because the provider
@@ -573,7 +576,8 @@ You may press ctrl-c [..]
         .with_stderr_data(output)
         .run();
 
-    let output_non_independent = r#"[UPDATING] `alternative` index
+    let output_non_independent = str![[r#"
+[UPDATING] `alternative` index
 {"v":1,"registry":{"index-url":"[..]","name":"alternative"},"kind":"get","operation":"read"}
 [PACKAGING] foo v0.1.1 ([ROOT]/foo)
 [PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
@@ -581,9 +585,10 @@ You may press ctrl-c [..]
 {"v":1,"registry":{"index-url":"[..]","name":"alternative"},"kind":"get","operation":"publish","name":"foo","vers":"0.1.1","cksum":"[..]"}
 [UPLOADED] foo v0.1.1 to registry `alternative`
 [NOTE] waiting [..]
-You may press ctrl-c [..]
+[HELP] you may press ctrl-c to skip waiting; the crate should be available shortly
 [PUBLISHED] foo v0.1.1 at registry `alternative`
-"#;
+
+"#]];
 
     p.change_file(
         "Cargo.toml",

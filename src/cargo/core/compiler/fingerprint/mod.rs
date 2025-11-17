@@ -383,8 +383,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
-use anyhow::format_err;
 use anyhow::Context as _;
+use anyhow::format_err;
 use cargo_util::paths;
 use filetime::FileTime;
 use serde::de;
@@ -392,21 +392,22 @@ use serde::ser;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 
-use crate::core::compiler::unit_graph::UnitDep;
 use crate::core::Package;
+use crate::core::compiler::unit_graph::UnitDep;
 use crate::util;
 use crate::util::errors::CargoResult;
 use crate::util::interning::InternedString;
-use crate::util::{internal, path_args, StableHasher};
-use crate::{GlobalContext, CARGO_ENV};
+use crate::util::log_message::LogMessage;
+use crate::util::{StableHasher, internal, path_args};
+use crate::{CARGO_ENV, GlobalContext};
 
 use super::custom_build::BuildDeps;
 use super::{BuildContext, BuildRunner, FileFlavor, Job, Unit, Work};
 
+pub use self::dep_info::Checksum;
 pub use self::dep_info::parse_dep_info;
 pub use self::dep_info::parse_rustc_dep_info;
 pub use self::dep_info::translate_dep_info;
-pub use self::dep_info::Checksum;
 pub use self::dirty_reason::DirtyReason;
 
 /// Determines if a [`Unit`] is up-to-date, and if not prepares necessary work to
@@ -447,6 +448,18 @@ pub fn prepare_target(
     let Some(dirty_reason) = dirty_reason else {
         return Ok(Job::new_fresh());
     };
+
+    if let Some(logger) = bcx.logger {
+        // Dont log FreshBuild as it is noisy.
+        if !dirty_reason.is_fresh_build() {
+            logger.log(LogMessage::Rebuild {
+                package_id: unit.pkg.package_id().to_spec(),
+                target: unit.target.clone(),
+                mode: unit.mode,
+                cause: dirty_reason.clone(),
+            });
+        }
+    }
 
     // We're going to rebuild, so ensure the source of the crate passes all
     // verification checks before we build it.
@@ -632,7 +645,8 @@ pub struct Fingerprint {
 }
 
 /// Indication of the status on the filesystem for a particular unit.
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, Serialize)]
+#[serde(tag = "fs_status", rename_all = "kebab-case")]
 pub enum FsStatus {
     /// This unit is to be considered stale, even if hash information all
     /// matches.
@@ -647,7 +661,9 @@ pub enum FsStatus {
     /// A dependency was stale.
     StaleDependency {
         name: InternedString,
+        #[serde(serialize_with = "serialize_file_time")]
         dep_mtime: FileTime,
+        #[serde(serialize_with = "serialize_file_time")]
         max_mtime: FileTime,
     },
 
@@ -656,6 +672,7 @@ pub enum FsStatus {
 
     /// This unit is up-to-date. All outputs and their corresponding mtime are
     /// listed in the payload here for other dependencies to compare against.
+    #[serde(skip)]
     UpToDate { mtimes: HashMap<PathBuf, FileTime> },
 }
 
@@ -669,6 +686,16 @@ impl FsStatus {
             | FsStatus::StaleDepFingerprint { .. } => false,
         }
     }
+}
+
+/// Serialize FileTime as milliseconds with nano.
+fn serialize_file_time<S>(ft: &FileTime, s: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    let secs_as_millis = ft.unix_seconds() as f64 * 1000.0;
+    let nanos_as_millis = ft.nanoseconds() as f64 / 1_000_000.0;
+    (secs_as_millis + nanos_as_millis).serialize(s)
 }
 
 impl Serialize for DepFingerprint {
@@ -771,11 +798,18 @@ enum LocalFingerprint {
 }
 
 /// See [`FsStatus::StaleItem`].
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
+#[serde(tag = "stale_item", rename_all = "kebab-case")]
 pub enum StaleItem {
-    MissingFile(PathBuf),
-    UnableToReadFile(PathBuf),
-    FailedToReadMetadata(PathBuf),
+    MissingFile {
+        path: PathBuf,
+    },
+    UnableToReadFile {
+        path: PathBuf,
+    },
+    FailedToReadMetadata {
+        path: PathBuf,
+    },
     FileSizeChanged {
         path: PathBuf,
         old_size: u64,
@@ -783,8 +817,10 @@ pub enum StaleItem {
     },
     ChangedFile {
         reference: PathBuf,
+        #[serde(serialize_with = "serialize_file_time")]
         reference_mtime: FileTime,
         stale: PathBuf,
+        #[serde(serialize_with = "serialize_file_time")]
         stale_mtime: FileTime,
     },
     ChangedChecksum {
@@ -792,7 +828,9 @@ pub enum StaleItem {
         stored_checksum: Checksum,
         new_checksum: Checksum,
     },
-    MissingChecksum(PathBuf),
+    MissingChecksum {
+        path: PathBuf,
+    },
     ChangedEnv {
         var: String,
         previous: Option<String>,
@@ -854,7 +892,7 @@ impl LocalFingerprint {
             LocalFingerprint::CheckDepInfo { dep_info, checksum } => {
                 let dep_info = build_root.join(dep_info);
                 let Some(info) = parse_dep_info(pkg_root, build_root, &dep_info)? else {
-                    return Ok(Some(StaleItem::MissingFile(dep_info)));
+                    return Ok(Some(StaleItem::MissingFile { path: dep_info }));
                 };
                 for (key, previous) in info.env.iter() {
                     if let Some(value) = pkg.manifest().metadata().env_var(key.as_str()) {
@@ -1031,18 +1069,18 @@ impl Fingerprint {
                 }
                 (
                     LocalFingerprint::CheckDepInfo {
-                        dep_info: adep,
+                        dep_info: a_dep,
                         checksum: checksum_a,
                     },
                     LocalFingerprint::CheckDepInfo {
-                        dep_info: bdep,
+                        dep_info: b_dep,
                         checksum: checksum_b,
                     },
                 ) => {
-                    if adep != bdep {
+                    if a_dep != b_dep {
                         return DirtyReason::DepInfoOutputChanged {
-                            old: bdep.clone(),
-                            new: adep.clone(),
+                            old: b_dep.clone(),
+                            new: a_dep.clone(),
                         };
                     }
                     if checksum_a != checksum_b {
@@ -1051,48 +1089,48 @@ impl Fingerprint {
                 }
                 (
                     LocalFingerprint::RerunIfChanged {
-                        output: aout,
-                        paths: apaths,
+                        output: a_out,
+                        paths: a_paths,
                     },
                     LocalFingerprint::RerunIfChanged {
-                        output: bout,
-                        paths: bpaths,
+                        output: b_out,
+                        paths: b_paths,
                     },
                 ) => {
-                    if aout != bout {
+                    if a_out != b_out {
                         return DirtyReason::RerunIfChangedOutputFileChanged {
-                            old: bout.clone(),
-                            new: aout.clone(),
+                            old: b_out.clone(),
+                            new: a_out.clone(),
                         };
                     }
-                    if apaths != bpaths {
+                    if a_paths != b_paths {
                         return DirtyReason::RerunIfChangedOutputPathsChanged {
-                            old: bpaths.clone(),
-                            new: apaths.clone(),
+                            old: b_paths.clone(),
+                            new: a_paths.clone(),
                         };
                     }
                 }
                 (
                     LocalFingerprint::RerunIfEnvChanged {
-                        var: akey,
-                        val: avalue,
+                        var: a_key,
+                        val: a_value,
                     },
                     LocalFingerprint::RerunIfEnvChanged {
-                        var: bkey,
-                        val: bvalue,
+                        var: b_key,
+                        val: b_value,
                     },
                 ) => {
-                    if *akey != *bkey {
+                    if *a_key != *b_key {
                         return DirtyReason::EnvVarsChanged {
-                            old: bkey.clone(),
-                            new: akey.clone(),
+                            old: b_key.clone(),
+                            new: a_key.clone(),
                         };
                     }
-                    if *avalue != *bvalue {
+                    if *a_value != *b_value {
                         return DirtyReason::EnvVarChanged {
-                            name: akey.clone(),
-                            old_value: bvalue.clone(),
-                            new_value: avalue.clone(),
+                            name: a_key.clone(),
+                            old_value: b_value.clone(),
+                            new_value: a_value.clone(),
                         };
                     }
                 }
@@ -1100,7 +1138,7 @@ impl Fingerprint {
                     return DirtyReason::LocalFingerprintTypeChanged {
                         old: b.kind(),
                         new: a.kind(),
-                    }
+                    };
                 }
             }
         }
@@ -1170,7 +1208,9 @@ impl Fingerprint {
             let Ok(mtime) = paths::mtime(output) else {
                 // This path failed to report its `mtime`. It probably doesn't
                 // exists, so leave ourselves as stale and bail out.
-                let item = StaleItem::FailedToReadMetadata(output.clone());
+                let item = StaleItem::FailedToReadMetadata {
+                    path: output.clone(),
+                };
                 self.fs_status = FsStatus::StaleItem(item);
                 return Ok(());
             };
@@ -1366,13 +1406,13 @@ impl StaleItem {
     /// that.
     fn log(&self) {
         match self {
-            StaleItem::MissingFile(path) => {
+            StaleItem::MissingFile { path } => {
                 info!("stale: missing {:?}", path);
             }
-            StaleItem::UnableToReadFile(path) => {
+            StaleItem::UnableToReadFile { path } => {
                 info!("stale: unable to read {:?}", path);
             }
-            StaleItem::FailedToReadMetadata(path) => {
+            StaleItem::FailedToReadMetadata { path } => {
                 info!("stale: couldn't read metadata {:?}", path);
             }
             StaleItem::ChangedFile {
@@ -1403,7 +1443,7 @@ impl StaleItem {
                 info!("prior checksum {stored_checksum}");
                 info!("  new checksum {new_checksum}");
             }
-            StaleItem::MissingChecksum(path) => {
+            StaleItem::MissingChecksum { path } => {
                 info!("stale: no prior checksum {:?}", path);
             }
             StaleItem::ChangedEnv {
@@ -1557,7 +1597,7 @@ fn calculate_normal(
     let compile_kind = unit.kind.fingerprint_hash();
     let mut declared_features = unit.pkg.summary().features().keys().collect::<Vec<_>>();
     declared_features.sort(); // to avoid useless rebuild if the user orders it's features
-                              // differently
+    // differently
     Ok(Fingerprint {
         rustc: util::hash_u64(&build_runner.bcx.rustc().verbose_version),
         target: util::hash_u64(&unit.target),
@@ -1958,16 +1998,21 @@ where
     I: IntoIterator<Item = (P, Option<(u64, Checksum)>)>,
     P: AsRef<Path>,
 {
-    let Ok(reference_mtime) = paths::mtime(reference) else {
-        return Some(StaleItem::MissingFile(reference.to_path_buf()));
+    let reference_mtime = match paths::mtime(reference) {
+        Ok(mtime) => mtime,
+        Err(..) => {
+            return Some(StaleItem::MissingFile {
+                path: reference.to_path_buf(),
+            });
+        }
     };
 
-    let skipable_dirs = if let Ok(cargo_home) = home::cargo_home() {
-        let skipable_dirs: Vec<_> = ["git", "registry"]
+    let skippable_dirs = if let Ok(cargo_home) = home::cargo_home() {
+        let skippable_dirs: Vec<_> = ["git", "registry"]
             .into_iter()
             .map(|subfolder| cargo_home.join(subfolder))
             .collect();
-        Some(skipable_dirs)
+        Some(skippable_dirs)
     } else {
         None
     };
@@ -1978,14 +2023,16 @@ where
         // (see also #9455 about marking the src directory readonly) which avoids rebuilds when CI
         // caches $CARGO_HOME/registry/{index, cache} and $CARGO_HOME/git/db across runs, keeping
         // the content the same but changing the mtime.
-        if let Some(ref skipable_dirs) = skipable_dirs {
-            if skipable_dirs.iter().any(|dir| path.starts_with(dir)) {
+        if let Some(ref skippable_dirs) = skippable_dirs {
+            if skippable_dirs.iter().any(|dir| path.starts_with(dir)) {
                 continue;
             }
         }
         if use_checksums {
             let Some((file_len, prior_checksum)) = prior_checksum else {
-                return Some(StaleItem::MissingChecksum(path.to_path_buf()));
+                return Some(StaleItem::MissingChecksum {
+                    path: path.to_path_buf(),
+                });
             };
             let path_buf = path.to_path_buf();
 
@@ -1993,7 +2040,9 @@ where
                 Entry::Occupied(o) => *o.get(),
                 Entry::Vacant(v) => {
                     let Ok(current_file_len) = fs::metadata(&path).map(|m| m.len()) else {
-                        return Some(StaleItem::FailedToReadMetadata(path.to_path_buf()));
+                        return Some(StaleItem::FailedToReadMetadata {
+                            path: path.to_path_buf(),
+                        });
                     };
                     if current_file_len != file_len {
                         return Some(StaleItem::FileSizeChanged {
@@ -2003,10 +2052,14 @@ where
                         });
                     }
                     let Ok(file) = File::open(path) else {
-                        return Some(StaleItem::MissingFile(path.to_path_buf()));
+                        return Some(StaleItem::MissingFile {
+                            path: path.to_path_buf(),
+                        });
                     };
                     let Ok(checksum) = Checksum::compute(prior_checksum.algo(), file) else {
-                        return Some(StaleItem::UnableToReadFile(path.to_path_buf()));
+                        return Some(StaleItem::UnableToReadFile {
+                            path: path.to_path_buf(),
+                        });
                     };
                     *v.insert(checksum)
                 }
@@ -2024,7 +2077,9 @@ where
                 Entry::Occupied(o) => *o.get(),
                 Entry::Vacant(v) => {
                     let Ok(mtime) = paths::mtime_recursive(path) else {
-                        return Some(StaleItem::MissingFile(path.to_path_buf()));
+                        return Some(StaleItem::MissingFile {
+                            path: path.to_path_buf(),
+                        });
                     };
                     *v.insert(mtime)
                 }
