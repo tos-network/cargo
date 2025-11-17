@@ -1,5 +1,4 @@
 use std::fs;
-use std::io::Write;
 
 use crate::prelude::*;
 use cargo_test_support::basic_manifest;
