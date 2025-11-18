@@ -2,7 +2,7 @@ use crate::core::compiler::CompileKind;
 use crate::util::context::JobsConfig;
 use crate::util::interning::InternedString;
 use crate::util::{CargoResult, GlobalContext, RustfixDiagnosticServer};
-use anyhow::{bail, Context as _};
+use anyhow::{Context as _, bail};
 use cargo_util::ProcessBuilder;
 use serde::ser;
 use std::cell::RefCell;
@@ -27,8 +27,6 @@ pub struct BuildConfig {
     pub message_format: MessageFormat,
     /// Force Cargo to do a full rebuild and treat each target as changed.
     pub force_rebuild: bool,
-    /// Output a build plan to stdout instead of actually compiling.
-    pub build_plan: bool,
     /// Output the unit graph to stdout instead of actually compiling.
     pub unit_graph: bool,
     /// `true` to avoid really compiling.
@@ -96,8 +94,9 @@ impl BuildConfig {
                 JobsConfig::String(j) => match j.as_str() {
                     "default" => default_parallelism()?,
                     _ => {
-                        anyhow::bail!(
-			    format!("could not parse `{j}`. Number of parallel jobs should be `default` or a number."))
+                        anyhow::bail!(format!(
+                            "could not parse `{j}`. Number of parallel jobs should be `default` or a number."
+                        ))
                     }
                 },
             },
@@ -122,7 +121,6 @@ impl BuildConfig {
             intent,
             message_format: MessageFormat::Human,
             force_rebuild: false,
-            build_plan: false,
             unit_graph: false,
             dry_run: false,
             primary_unit_rustc: None,

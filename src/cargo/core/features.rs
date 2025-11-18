@@ -124,17 +124,16 @@ use std::fmt::{self, Write};
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use anyhow::{bail, Error};
+use anyhow::{Error, bail};
 use cargo_util::ProcessBuilder;
 use serde::{Deserialize, Serialize};
 
+use crate::GlobalContext;
 use crate::core::resolver::ResolveBehavior;
 use crate::util::errors::CargoResult;
 use crate::util::indented_lines;
-use crate::GlobalContext;
 
-pub const SEE_CHANNELS: &str =
-    "See https://doc.rust-lang.org/book/appendix-07-nightly-rust.html for more information \
+pub const SEE_CHANNELS: &str = "See https://doc.rust-lang.org/book/appendix-07-nightly-rust.html for more information \
      about Rust release channels.";
 
 /// Value of [`allow-features`](CliUnstable::allow_features)
@@ -577,6 +576,12 @@ features! {
 
     /// Allows use of editions that are not yet stable.
     (unstable, unstable_editions, "", "reference/unstable.html#unstable-editions"),
+
+    /// Allows use of multiple build scripts.
+    (unstable, multiple_build_scripts, "", "reference/unstable.html#multiple-build-scripts"),
+
+    /// Allows use of panic="immediate-abort".
+    (unstable, panic_immediate_abort, "", "reference/unstable.html#panic-immediate-abort"),
 }
 
 /// Status and metadata for a single unstable feature.
@@ -618,7 +623,32 @@ impl Features {
     ) -> CargoResult<()> {
         let nightly_features_allowed = self.nightly_features_allowed;
         let Some((slot, feature)) = self.status(feature_name) else {
-            bail!("unknown cargo feature `{}`", feature_name)
+            let mut msg = format!("unknown Cargo.toml feature `{feature_name}`\n\n");
+            let mut append_see_docs = true;
+
+            if feature_name.contains('_') {
+                let _ = writeln!(msg, "Feature names must use '-' instead of '_'.");
+                append_see_docs = false;
+            } else {
+                let underscore_name = feature_name.replace('-', "_");
+                if CliUnstable::help()
+                    .iter()
+                    .any(|(option, _)| *option == underscore_name)
+                {
+                    let _ = writeln!(
+                        msg,
+                        "This feature can be enabled via -Z{feature_name} or the `[unstable]` section in config.toml."
+                    );
+                }
+            }
+
+            if append_see_docs {
+                let _ = writeln!(
+                    msg,
+                    "See https://doc.rust-lang.org/nightly/cargo/reference/unstable.html for more information."
+                );
+            }
+            bail!(msg)
         };
 
         if *slot {
@@ -817,7 +847,8 @@ unstable_cli_options!(
     avoid_dev_deps: bool = ("Avoid installing dev-dependencies if possible"),
     binary_dep_depinfo: bool = ("Track changes to dependency artifacts"),
     bindeps: bool = ("Allow Cargo packages to depend on bin, cdylib, and staticlib crates, and use the artifacts built by those crates"),
-    build_dir: bool = ("Enable the `build.build-dir` option in .cargo/config.toml file"),
+    build_analysis: bool = ("Record and persist build metrics across runs, with commands to query past builds."),
+    build_dir_new_layout: bool = ("Use the new build-dir filesystem layout"),
     #[serde(deserialize_with = "deserialize_comma_separated_list")]
     build_std: Option<Vec<String>>  = ("Enable Cargo to compile the standard library itself as part of a crate graph compilation"),
     #[serde(deserialize_with = "deserialize_comma_separated_list")]
@@ -843,18 +874,20 @@ unstable_cli_options!(
     next_lockfile_bump: bool,
     no_embed_metadata: bool = ("Avoid embedding metadata in library artifacts"),
     no_index_update: bool = ("Do not update the registry index even if the cache is outdated"),
-    package_workspace: bool = ("Handle intra-workspace dependencies when packaging"),
     panic_abort_tests: bool = ("Enable support to run tests with -Cpanic=abort"),
+    panic_immediate_abort: bool = ("Enable setting `panic = \"immediate-abort\"` in profiles"),
     profile_hint_mostly_unused: bool = ("Enable the `hint-mostly-unused` setting in profiles to mark a crate as mostly unused."),
     profile_rustflags: bool = ("Enable the `rustflags` option in profiles in .cargo/config.toml file"),
     public_dependency: bool = ("Respect a dependency's `public` field in Cargo.toml to control public/private dependencies"),
     publish_timeout: bool = ("Enable the `publish.timeout` key in .cargo/config.toml file"),
     root_dir: Option<PathBuf> = ("Set the root directory relative to which paths are printed (defaults to workspace root)"),
+    rustc_unicode: bool = ("Enable `rustc`'s unicode error format in Cargo's error messages"),
     rustdoc_depinfo: bool = ("Use dep-info files in rustdoc rebuild detection"),
     rustdoc_map: bool = ("Allow passing external documentation mappings to rustdoc"),
     rustdoc_scrape_examples: bool = ("Allows Rustdoc to scrape code examples from reverse-dependencies"),
     sbom: bool = ("Enable the `sbom` option in build config in .cargo/config.toml file"),
     script: bool = ("Enable support for single-file, `.rs` packages"),
+    section_timings: bool = ("Enable support for extended compilation sections in --timings output"),
     separate_nightlies: bool,
     skip_rustdoc_fingerprint: bool,
     target_applies_to_host: bool = ("Enable the `target-applies-to-host` key in the .cargo/config.toml file"),
@@ -939,6 +972,11 @@ const STABILIZED_CHECK_CFG: &str =
     "Compile-time checking of conditional (a.k.a. `-Zcheck-cfg`) is now always enabled.";
 
 const STABILIZED_DOCTEST_XCOMPILE: &str = "Doctest cross-compiling is now always enabled.";
+
+const STABILIZED_PACKAGE_WORKSPACE: &str =
+    "Workspace packaging and publishing (a.k.a. `-Zpackage-workspace`) is now always enabled.";
+
+const STABILIZED_BUILD_DIR: &str = "build.build-dir is now always enabled.";
 
 fn deserialize_comma_separated_list<'de, D>(
     deserializer: D,
@@ -1174,7 +1212,7 @@ fn parse_gitoxide(
 
 impl CliUnstable {
     /// Parses `-Z` flags from the command line, and returns messages that warn
-    /// if any flag has alreardy been stabilized.
+    /// if any flag has already been stabilized.
     pub fn parse(
         &mut self,
         flags: &[String],
@@ -1321,6 +1359,9 @@ impl CliUnstable {
             "lints" => stabilized_warn(k, "1.74", STABILIZED_LINTS),
             "registry-auth" => stabilized_warn(k, "1.74", STABILIZED_REGISTRY_AUTH),
             "check-cfg" => stabilized_warn(k, "1.80", STABILIZED_CHECK_CFG),
+            "doctest-xcompile" => stabilized_warn(k, "1.89", STABILIZED_DOCTEST_XCOMPILE),
+            "package-workspace" => stabilized_warn(k, "1.89", STABILIZED_PACKAGE_WORKSPACE),
+            "build-dir" => stabilized_warn(k, "1.91", STABILIZED_BUILD_DIR),
 
             // Unstable features
             // Sorted alphabetically:
@@ -1329,14 +1370,14 @@ impl CliUnstable {
             "avoid-dev-deps" => self.avoid_dev_deps = parse_empty(k, v)?,
             "binary-dep-depinfo" => self.binary_dep_depinfo = parse_empty(k, v)?,
             "bindeps" => self.bindeps = parse_empty(k, v)?,
-            "build-dir" => self.build_dir = parse_empty(k, v)?,
+            "build-analysis" => self.build_analysis = parse_empty(k, v)?,
+            "build-dir-new-layout" => self.build_dir_new_layout = parse_empty(k, v)?,
             "build-std" => self.build_std = Some(parse_list(v)),
             "build-std-features" => self.build_std_features = Some(parse_list(v)),
             "cargo-lints" => self.cargo_lints = parse_empty(k, v)?,
             "codegen-backend" => self.codegen_backend = parse_empty(k, v)?,
             "config-include" => self.config_include = parse_empty(k, v)?,
             "direct-minimal-versions" => self.direct_minimal_versions = parse_empty(k, v)?,
-            "doctest-xcompile" => stabilized_warn(k, "1.89", STABILIZED_DOCTEST_XCOMPILE),
             "dual-proc-macros" => self.dual_proc_macros = parse_empty(k, v)?,
             "feature-unification" => self.feature_unification = parse_empty(k, v)?,
             "fix-edition" => {
@@ -1364,7 +1405,6 @@ impl CliUnstable {
             "mtime-on-use" => self.mtime_on_use = parse_empty(k, v)?,
             "no-embed-metadata" => self.no_embed_metadata = parse_empty(k, v)?,
             "no-index-update" => self.no_index_update = parse_empty(k, v)?,
-            "package-workspace" => self.package_workspace = parse_empty(k, v)?,
             "panic-abort-tests" => self.panic_abort_tests = parse_empty(k, v)?,
             "public-dependency" => self.public_dependency = parse_empty(k, v)?,
             "profile-hint-mostly-unused" => self.profile_hint_mostly_unused = parse_empty(k, v)?,
@@ -1372,15 +1412,18 @@ impl CliUnstable {
             "trim-paths" => self.trim_paths = parse_empty(k, v)?,
             "publish-timeout" => self.publish_timeout = parse_empty(k, v)?,
             "root-dir" => self.root_dir = v.map(|v| v.into()),
+            "rustc-unicode" => self.rustc_unicode = parse_empty(k, v)?,
             "rustdoc-depinfo" => self.rustdoc_depinfo = parse_empty(k, v)?,
             "rustdoc-map" => self.rustdoc_map = parse_empty(k, v)?,
             "rustdoc-scrape-examples" => self.rustdoc_scrape_examples = parse_empty(k, v)?,
             "sbom" => self.sbom = parse_empty(k, v)?,
+            "section-timings" => self.section_timings = parse_empty(k, v)?,
             "separate-nightlies" => self.separate_nightlies = parse_empty(k, v)?,
             "checksum-freshness" => self.checksum_freshness = parse_empty(k, v)?,
             "skip-rustdoc-fingerprint" => self.skip_rustdoc_fingerprint = parse_empty(k, v)?,
             "script" => self.script = parse_empty(k, v)?,
             "target-applies-to-host" => self.target_applies_to_host = parse_empty(k, v)?,
+            "panic-immediate-abort" => self.panic_immediate_abort = parse_empty(k, v)?,
             "unstable-options" => self.unstable_options = parse_empty(k, v)?,
             "warnings" => self.warnings = parse_empty(k, v)?,
             _ => bail!(

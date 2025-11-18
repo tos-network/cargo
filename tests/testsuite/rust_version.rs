@@ -1,7 +1,8 @@
 //! Tests for targets with `rust-version`.
 
-use cargo_test_support::prelude::*;
-use cargo_test_support::{cargo_process, project, registry::Package, str};
+use crate::prelude::*;
+use crate::utils::cargo_process;
+use cargo_test_support::{project, registry::Package, str};
 
 #[cargo_test]
 fn rust_version_satisfied() {
@@ -52,7 +53,6 @@ fn rust_version_error() {
   |
 7 |             rust-version = "^1.43"
   |                            ^^^^^^^
-  |
 
 "#]])
         .run();
@@ -82,7 +82,7 @@ fn rust_version_older_than_edition() {
 [ERROR] failed to parse manifest at `[ROOT]/foo/Cargo.toml`
 
 Caused by:
-  rust-version 1.1 is older than first version (1.31.0) required by the specified edition (2018)
+  rust-version 1.1 is incompatible with the version (1.31.0) required by the specified edition (2018)
 
 "#]])
         .run();

@@ -1,7 +1,7 @@
 //! Tests for the `cargo update` command.
 
+use crate::prelude::*;
 use cargo_test_support::compare::assert_e2e;
-use cargo_test_support::prelude::*;
 use cargo_test_support::registry::{self};
 use cargo_test_support::registry::{Dependency, Package};
 use cargo_test_support::{basic_lib_manifest, basic_manifest, git, project, str};
@@ -827,6 +827,7 @@ fn update_precise_first_run() {
     "root": "path+[ROOTURL]/foo#bar@0.0.1"
   },
   "target_directory": "[ROOT]/foo/target",
+  "build_directory": "[ROOT]/foo/target",
   "version": 1,
   "workspace_default_members": [
     "path+[ROOTURL]/foo#bar@0.0.1"
@@ -1437,7 +1438,8 @@ fn precise_yanked() {
         .with_stderr_data(str![[r#"
 [UPDATING] `dummy-registry` index
 [WARNING] selected package `bar@0.1.1` was yanked by the author
-[NOTE] if possible, try a compatible non-yanked version
+  |
+  = [HELP] if possible, try a compatible non-yanked version
 [UPDATING] bar v0.1.0 -> v0.1.1
 
 "#]])
@@ -1477,7 +1479,8 @@ fn precise_yanked_multiple_presence() {
         .with_stderr_data(str![[r#"
 [UPDATING] `dummy-registry` index
 [WARNING] selected package `bar@0.1.1` was yanked by the author
-[NOTE] if possible, try a compatible non-yanked version
+  |
+  = [HELP] if possible, try a compatible non-yanked version
 [UPDATING] bar v0.1.0 -> v0.1.1
 
 "#]])
@@ -1535,7 +1538,7 @@ fn report_behind() {
 [UPDATING] breaking v0.1.0 -> v0.1.1 (available: v0.2.0)
 [UNCHANGED] pre v1.0.0-alpha.0 (available: v1.0.0-alpha.1)
 [UNCHANGED] two-ver v0.1.0 (available: v0.2.0)
-[NOTE] to see how you depend on a package, run `cargo tree --invert --package <dep>@<ver>`
+[NOTE] to see how you depend on a package, run `cargo tree --invert <dep>@<ver>`
 [WARNING] not updating lockfile due to dry run
 
 "#]])
@@ -1560,7 +1563,7 @@ fn report_behind() {
 [UNCHANGED] breaking v0.1.1 (available: v0.2.0)
 [UNCHANGED] pre v1.0.0-alpha.0 (available: v1.0.0-alpha.1)
 [UNCHANGED] two-ver v0.1.0 (available: v0.2.0)
-[NOTE] to see how you depend on a package, run `cargo tree --invert --package <dep>@<ver>`
+[NOTE] to see how you depend on a package, run `cargo tree --invert <dep>@<ver>`
 [WARNING] not updating lockfile due to dry run
 
 "#]])

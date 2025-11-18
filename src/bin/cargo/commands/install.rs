@@ -3,11 +3,11 @@ use crate::command_prelude::*;
 use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::format_err;
+use cargo::CargoResult;
 use cargo::core::{GitReference, SourceId, Workspace};
 use cargo::ops;
 use cargo::util::IntoUrl;
 use cargo::util::VersionExt;
-use cargo::CargoResult;
 use cargo_util_schemas::manifest::PackageName;
 use itertools::Itertools;
 use semver::VersionReq;
@@ -105,7 +105,7 @@ pub fn cli() -> Command {
         .arg_timings()
         .arg_lockfile_path()
         .after_help(color_print::cstr!(
-            "Run `<cyan,bold>cargo help install</>` for more detailed information.\n"
+            "Run `<bright-cyan,bold>cargo help install</>` for more detailed information.\n"
         ))
 }
 
@@ -137,7 +137,7 @@ pub fn exec(gctx: &mut GlobalContext, args: &ArgMatches) -> CliResult {
         let package_name = PackageName::new(crate_name);
         if !crate_name.contains("@") && package_name.is_err() {
             for (idx, ch) in crate_name.char_indices() {
-                if !(unicode_xid::UnicodeXID::is_xid_continue(ch) || ch == '-') {
+                if !(unicode_ident::is_xid_continue(ch) || ch == '-') {
                     let mut suggested_crate_name = crate_name.to_string();
                     suggested_crate_name.insert_str(idx, "@");
                     if let Ok((_, Some(_))) = parse_crate(&suggested_crate_name.as_str()) {

@@ -1,14 +1,15 @@
 //! Tests for the `cargo package` command.
 
-use std::fs::{self, read_to_string, File};
+use std::fs::{self, File, read_to_string};
 use std::path::Path;
 
-use cargo_test_support::prelude::*;
+use crate::prelude::*;
+use crate::utils::cargo_process;
 use cargo_test_support::publish::validate_crate_contents;
 use cargo_test_support::registry::{self, Package};
 use cargo_test_support::{
-    basic_manifest, cargo_process, git, paths, project, rustc_host, str, symlink_supported, t,
-    Project, ProjectBuilder,
+    Project, ProjectBuilder, basic_manifest, git, paths, project, rustc_host, str,
+    symlink_supported, t,
 };
 use flate2::read::GzDecoder;
 use tar::Archive;
@@ -35,8 +36,9 @@ fn simple() {
 
     p.cargo("package")
         .with_stderr_data(str![[r#"
-[WARNING] manifest has no documentation, homepage or repository.
-See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info.
+[WARNING] manifest has no documentation, homepage or repository
+  |
+  = [NOTE] see https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info
 [PACKAGING] foo v0.0.1 ([ROOT]/foo)
 [PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
 [VERIFYING] foo v0.0.1 ([ROOT]/foo)
@@ -57,8 +59,9 @@ src/main.rs
         .run();
     p.cargo("package")
         .with_stderr_data(str![[r#"
-[WARNING] manifest has no documentation, homepage or repository.
-See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info.
+[WARNING] manifest has no documentation, homepage or repository
+  |
+  = [NOTE] see https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info
 [PACKAGING] foo v0.0.1 ([ROOT]/foo)
 [PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
 [VERIFYING] foo v0.0.1 ([ROOT]/foo)
@@ -88,8 +91,9 @@ fn metadata_warning() {
     let p = project().file("src/main.rs", "fn main() {}").build();
     p.cargo("package")
         .with_stderr_data(str![[r#"
-[WARNING] manifest has no description, license, license-file, documentation, homepage or repository.
-See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info.
+[WARNING] manifest has no description, license, license-file, documentation, homepage or repository
+  |
+  = [NOTE] see https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info
 [PACKAGING] foo v0.0.1 ([ROOT]/foo)
 [PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
 [VERIFYING] foo v0.0.1 ([ROOT]/foo)
@@ -115,8 +119,9 @@ See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for
         .build();
     p.cargo("package")
         .with_stderr_data(str![[r#"
-[WARNING] manifest has no description, documentation, homepage or repository.
-See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info.
+[WARNING] manifest has no description, documentation, homepage or repository
+  |
+  = [NOTE] see https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info
 [PACKAGING] foo v0.0.1 ([ROOT]/foo)
 [PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
 [VERIFYING] foo v0.0.1 ([ROOT]/foo)
@@ -169,8 +174,9 @@ fn package_verbose() {
     cargo_process("package -v --no-verify")
         .cwd(repo.root())
         .with_stderr_data(str![[r#"
-[WARNING] manifest has no description, license, license-file, documentation, homepage or repository.
-See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info.
+[WARNING] manifest has no description, license, license-file, documentation, homepage or repository
+  |
+  = [NOTE] see https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info
 [PACKAGING] foo v0.0.1 ([ROOT]/all)
 [ARCHIVING] .cargo_vcs_info.json
 [ARCHIVING] Cargo.lock
@@ -209,8 +215,9 @@ See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for
     cargo_process("package -v --no-verify")
         .cwd(repo.root().join("a/a"))
         .with_stderr_data(str![[r#"
-[WARNING] manifest has no description, license, license-file, documentation, homepage or repository.
-See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info.
+[WARNING] manifest has no description, license, license-file, documentation, homepage or repository
+  |
+  = [NOTE] see https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info
 [PACKAGING] a v0.0.1 ([ROOT]/all/a/a)
 [ARCHIVING] .cargo_vcs_info.json
 [ARCHIVING] Cargo.lock
@@ -252,8 +259,9 @@ fn package_verification() {
     p.cargo("build").run();
     p.cargo("package")
         .with_stderr_data(str![[r#"
-[WARNING] manifest has no description, license, license-file, documentation, homepage or repository.
-See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info.
+[WARNING] manifest has no description, license, license-file, documentation, homepage or repository
+  |
+  = [NOTE] see https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info
 [PACKAGING] foo v0.0.1 ([ROOT]/foo)
 [PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
 [VERIFYING] foo v0.0.1 ([ROOT]/foo)
@@ -366,12 +374,16 @@ fn path_dependency_no_version() {
     p.cargo("package")
         .with_status(101)
         .with_stderr_data(str![[r#"
-[WARNING] manifest has no documentation, homepage or repository.
-See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info.
-[ERROR] all dependencies must have a version specified when packaging.
-dependency `bar` does not specify a version
-Note: The packaged dependency will use the version from crates.io,
-the `path` specification will be removed from the dependency declaration.
+[WARNING] manifest has no documentation, homepage or repository
+  |
+  = [NOTE] see https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info
+[ERROR] failed to verify manifest at `[ROOT]/foo/Cargo.toml`
+
+Caused by:
+  all dependencies must have a version requirement specified when packaging.
+  dependency `bar` does not specify a version
+  Note: The packaged dependency will use the version from crates.io,
+  the `path` specification will be removed from the dependency declaration.
 
 "#]])
         .run();
@@ -403,12 +415,16 @@ fn git_dependency_no_version() {
     p.cargo("package")
         .with_status(101)
         .with_stderr_data(str![[r#"
-[WARNING] manifest has no documentation, homepage or repository.
-See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info.
-[ERROR] all dependencies must have a version specified when packaging.
-dependency `foo` does not specify a version
-Note: The packaged dependency will use the version from crates.io,
-the `git` specification will be removed from the dependency declaration.
+[WARNING] manifest has no documentation, homepage or repository
+  |
+  = [NOTE] see https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info
+[ERROR] failed to verify manifest at `[ROOT]/foo/Cargo.toml`
+
+Caused by:
+  all dependencies must have a version requirement specified when packaging.
+  dependency `foo` does not specify a version
+  Note: The packaged dependency will use the version from crates.io,
+  the `git` specification will be removed from the dependency declaration.
 
 "#]])
         .run();
@@ -488,8 +504,9 @@ fn exclude() {
         .cwd(repo.root())
         .with_stdout_data("")
         .with_stderr_data(str![[r#"
-[WARNING] manifest has no description, license, license-file, documentation, homepage or repository.
-See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info.
+[WARNING] manifest has no description, license, license-file, documentation, homepage or repository
+  |
+  = [NOTE] see https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info
 [PACKAGING] foo v0.0.1 ([ROOT]/exclude)
 [ARCHIVING] .cargo_vcs_info.json
 [ARCHIVING] Cargo.lock
@@ -562,8 +579,9 @@ fn include() {
     cargo_process("package --no-verify -v")
         .cwd(repo.root())
         .with_stderr_data(str![[r#"
-[WARNING] manifest has no description, license, license-file, documentation, homepage or repository.
-See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info.
+[WARNING] manifest has no description, license, license-file, documentation, homepage or repository
+  |
+  = [NOTE] see https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info
 [WARNING] both package.include and package.exclude are specified; the exclude list will be ignored
 [PACKAGING] foo v0.0.1 ([ROOT]/include)
 [ARCHIVING] .cargo_vcs_info.json
@@ -778,8 +796,9 @@ fn package_weird_characters() {
     p.cargo("package")
         .with_status(101)
         .with_stderr_data(str![[r#"
-[WARNING] manifest has no description, license, license-file, documentation, homepage or repository.
-See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info.
+[WARNING] manifest has no description, license, license-file, documentation, homepage or repository
+  |
+  = [NOTE] see https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info
 [ERROR] cannot package a filename with a special character `:`: src/:foo
 
 "#]])
@@ -800,8 +819,9 @@ fn repackage_on_source_change() {
     // Check that cargo rebuilds the tarball
     p.cargo("package")
         .with_stderr_data(str![[r#"
-[WARNING] manifest has no description, license, license-file, documentation, homepage or repository.
-See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info.
+[WARNING] manifest has no description, license, license-file, documentation, homepage or repository
+  |
+  = [NOTE] see https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info
 [PACKAGING] foo v0.0.1 ([ROOT]/foo)
 [PACKAGED] 5 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
 [VERIFYING] foo v0.0.1 ([ROOT]/foo)
@@ -1340,7 +1360,7 @@ fn dirty_file_outside_pkg_root_considered_dirty() {
     git::commit(&repo);
 
     // Changing files outside pkg root under situations below should be treated
-    // as dirty. `cargo package` is expected to fail on VCS stastus check.
+    // as dirty. `cargo package` is expected to fail on VCS status check.
     //
     // * Changes in files outside package root that source files symlink to
     p.change_file("README.md", "after");
@@ -1348,7 +1368,7 @@ fn dirty_file_outside_pkg_root_considered_dirty() {
     p.change_file("original-dir/file", "after");
     // * Changes in files outside pkg root that `license-file`/`readme` point to
     p.change_file("LICENSE", "after");
-    // * When workspace root manifest has changned,
+    // * When workspace root manifest has changed,
     //   no matter whether workspace inheritance is involved.
     p.change_file(
         "Cargo.toml",
@@ -1360,7 +1380,7 @@ fn dirty_file_outside_pkg_root_considered_dirty() {
             edition = "2021"
         "#,
     );
-    // Changes in files outside git workdir won't affect vcs status check
+    // Changes in files outside git workdir won't affect VCS status check
     p.change_file(
         &main_outside_pkg_root,
         r#"fn main() { eprintln!("after"); }"#,
@@ -1463,13 +1483,16 @@ fn dirty_file_outside_pkg_root_inside_submodule() {
     p.symlink("submodule/file.txt", "isengard/src/file.txt");
     git::add(&repo);
     git::commit(&repo);
-    // This dirtyness should be detected in the future.
     p.change_file("submodule/file.txt", "changed");
 
     p.cargo("package --workspace --no-verify")
+        .with_status(101)
         .with_stderr_data(str![[r#"
-[PACKAGING] isengard v0.0.0 ([ROOT]/foo/isengard)
-[PACKAGED] 6 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
+[ERROR] 1 files in the working directory contain changes that were not yet committed into git:
+
+isengard/src/file.txt
+
+to proceed despite this and include the uncommitted changes, pass the `--allow-dirty` flag
 
 "#]])
         .run();
@@ -1815,6 +1838,46 @@ fn package_two_kinds_of_deps() {
         .build();
 
     p.cargo("package --no-verify").run();
+}
+
+#[cargo_test]
+fn package_should_use_build_cache() {
+    Package::new("other", "1.0.0").publish();
+    let p = project()
+        .file(
+            "Cargo.toml",
+            r#"
+                [package]
+                name = "foo"
+                version = "0.0.1"
+                edition = "2015"
+                authors = []
+
+                [dependencies]
+                other = "1.0"
+            "#,
+        )
+        .file("src/lib.rs", "")
+        .build();
+
+    // Build once so that the build cache is populated
+    p.cargo("build").run();
+
+    // Run package and verify we do not rebuild the `other` crate
+    p.cargo("package")
+        .with_stderr_data(str![[r#"
+[WARNING] manifest has no description, license, license-file, documentation, homepage or repository
+  |
+  = [NOTE] see https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info
+[PACKAGING] foo v0.0.1 ([ROOT]/foo)
+[UPDATING] `dummy-registry` index
+[PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
+[VERIFYING] foo v0.0.1 ([ROOT]/foo)
+[COMPILING] foo v0.0.1 ([ROOT]/foo/target/package/foo-0.0.1)
+[FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
+
+"#]])
+        .run();
 }
 
 #[cargo_test(nightly, reason = "exported_private_dependencies lint is unstable")]
@@ -2562,8 +2625,9 @@ fn empty_license_file_path() {
     p.cargo("package --no-verify")
         .with_status(101)
         .with_stderr_data(str![[r#"
-[WARNING] manifest has no license or license-file.
-See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info.
+[WARNING] manifest has no license or license-file
+  |
+  = [NOTE] see https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info
 [ERROR] license-file `` does not appear to exist (relative to `[ROOT]/foo`).
 Please update the license-file setting in the manifest at `[ROOT]/foo/Cargo.toml`.
 
@@ -2885,7 +2949,10 @@ src/lib.rs
         .run();
 }
 
-#[cargo_test]
+#[cargo_test(
+    nightly,
+    reason = "temporarily due to flakiness: https://rust-lang.zulipchat.com/#narrow/channel/246057-t-cargo/topic/reserved_windows_name.20test.20failing/with/543085230"
+)]
 #[cfg(windows)]
 fn reserved_windows_name() {
     // If we are running on a version of Windows that allows these reserved filenames,
@@ -2989,10 +3056,13 @@ src/main.rs
     p.cargo("package")
         .with_status(101)
         .with_stderr_data(str![[r#"
-[ERROR] all dependencies must have a version specified when packaging.
-dependency `bar` does not specify a version
-Note: The packaged dependency will use the version from crates.io,
-the `path` specification will be removed from the dependency declaration.
+[ERROR] failed to verify manifest at `[ROOT]/foo/Cargo.toml`
+
+Caused by:
+  all dependencies must have a version requirement specified when packaging.
+  dependency `bar` does not specify a version
+  Note: The packaged dependency will use the version from crates.io,
+  the `path` specification will be removed from the dependency declaration.
 
 "#]])
         .run();
@@ -3023,7 +3093,7 @@ fn long_file_names() {
         let test_path = test_path.join(long_name);
         if let Err(e) = File::create(&test_path) {
             // write to stderr directly to avoid output from being captured
-            // and always display text, even without --nocapture
+            // and always display text, even without --no-capture
             use std::io::Write;
             writeln!(
                 std::io::stderr(),
@@ -3092,12 +3162,16 @@ fn reproducible_output() {
     let f = File::open(&p.root().join("target/package/foo-0.0.1.crate")).unwrap();
     let decoder = GzDecoder::new(f);
     let mut archive = Archive::new(decoder);
+
+    // Hardcoded value be removed once alexcrichton/tar-rs#420 is merged and released.
+    // See also rust-lang/cargo#16237
+    const DETERMINISTIC_TIMESTAMP: u64 = 1153704088;
     for ent in archive.entries().unwrap() {
         let ent = ent.unwrap();
         println!("checking {:?}", ent.path());
         let header = ent.header();
         assert_eq!(header.mode().unwrap(), 0o644);
-        assert!(header.mtime().unwrap() != 0);
+        assert!(header.mtime().unwrap() == DETERMINISTIC_TIMESTAMP);
         assert_eq!(header.username().unwrap().unwrap(), "");
         assert_eq!(header.groupname().unwrap().unwrap(), "");
     }
@@ -3245,12 +3319,14 @@ fn in_workspace() {
 
     p.cargo("package --workspace")
         .with_stderr_data(str![[r#"
-[WARNING] manifest has no documentation, homepage or repository.
-See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info.
+[WARNING] manifest has no documentation, homepage or repository
+  |
+  = [NOTE] see https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info
 [PACKAGING] bar v0.0.1 ([ROOT]/foo/bar)
 [PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
-[WARNING] manifest has no documentation, homepage or repository.
-See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info.
+[WARNING] manifest has no documentation, homepage or repository
+  |
+  = [NOTE] see https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info
 [PACKAGING] foo v0.0.1 ([ROOT]/foo)
 [PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
 [VERIFYING] bar v0.0.1 ([ROOT]/foo/bar)
@@ -3597,7 +3673,7 @@ fn larger_filesizes() {
             "#;
     let lots_of_crabs = "🦀".repeat(1337);
     let main_rs_contents = format!(r#"fn main() {{ println!("{}"); }}"#, lots_of_crabs);
-    let bar_txt_contents = "This file is relatively uncompressible, to increase the compressed
+    let bar_txt_contents = "This file is relatively incompressible, to increase the compressed
         package size beyond 1KiB.
         Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt
         ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation
@@ -3713,7 +3789,7 @@ fn symlink_filesizes() {
             "#;
     let lots_of_crabs = "🦀".repeat(1337);
     let main_rs_contents = format!(r#"fn main() {{ println!("{}"); }}"#, lots_of_crabs);
-    let bar_txt_contents = "This file is relatively uncompressible, to increase the compressed
+    let bar_txt_contents = "This file is relatively incompressible, to increase the compressed
         package size beyond 1KiB.
         Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt
         ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation
@@ -3853,10 +3929,11 @@ fn normalize_case() {
     .unwrap();
 
     p.cargo("package").with_stderr_data(str![[r#"
-[WARNING] manifest has no documentation, homepage or repository.
-See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info.
+[WARNING] manifest has no documentation, homepage or repository
+  |
+  = [NOTE] see https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info
 [PACKAGING] foo v0.0.1 ([ROOT]/foo)
-[WARNING] ignoring `package.build` as `build.rs` is not included in the published package
+[WARNING] ignoring `package.build` entry `build.rs` as it is not included in the published package
 [WARNING] ignoring binary `foo` as `src/main.rs` is not included in the published package
 [WARNING] ignoring example `ExampleFoo` as `examples/ExampleFoo.rs` is not included in the published package
 [WARNING] ignoring test `ExplicitPath` as `tests/ExplicitPath.rs` is not included in the published package
@@ -3882,10 +3959,11 @@ src/lib.rs
 "#]])
         .run();
     p.cargo("package").with_stderr_data(str![[r#"
-[WARNING] manifest has no documentation, homepage or repository.
-See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info.
+[WARNING] manifest has no documentation, homepage or repository
+  |
+  = [NOTE] see https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info
 [PACKAGING] foo v0.0.1 ([ROOT]/foo)
-[WARNING] ignoring `package.build` as `build.rs` is not included in the published package
+[WARNING] ignoring `package.build` entry `build.rs` as it is not included in the published package
 [WARNING] ignoring binary `foo` as `src/main.rs` is not included in the published package
 [WARNING] ignoring example `ExampleFoo` as `examples/ExampleFoo.rs` is not included in the published package
 [WARNING] ignoring test `ExplicitPath` as `tests/ExplicitPath.rs` is not included in the published package
@@ -3972,8 +4050,9 @@ fn mixed_case() {
 
     p.cargo("package")
         .with_stderr_data(str![[r#"
-[WARNING] manifest has no documentation, homepage or repository.
-See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info.
+[WARNING] manifest has no documentation, homepage or repository
+  |
+  = [NOTE] see https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info
 [PACKAGING] foo v0.0.1 ([ROOT]/foo)
 [PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
 [VERIFYING] foo v0.0.1 ([ROOT]/foo)
@@ -3994,8 +4073,9 @@ src/main.rs
         .run();
     p.cargo("package")
         .with_stderr_data(str![[r#"
-[WARNING] manifest has no documentation, homepage or repository.
-See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info.
+[WARNING] manifest has no documentation, homepage or repository
+  |
+  = [NOTE] see https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info
 [PACKAGING] foo v0.0.1 ([ROOT]/foo)
 [PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
 [VERIFYING] foo v0.0.1 ([ROOT]/foo)
@@ -4031,8 +4111,9 @@ fn versionless_package() {
 
     p.cargo("package")
         .with_stderr_data(str![[r#"
-[WARNING] manifest has no license, license-file, documentation, homepage or repository.
-See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info.
+[WARNING] manifest has no license, license-file, documentation, homepage or repository
+  |
+  = [NOTE] see https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info
 [PACKAGING] foo v0.0.0 ([ROOT]/foo)
 [PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
 [VERIFYING] foo v0.0.0 ([ROOT]/foo)
@@ -4183,8 +4264,9 @@ fn build_script_outside_pkg_root() {
     p.cargo("package -l")
         .with_status(101)
         .with_stderr_data(str![[r#"
-[WARNING] manifest has no documentation, homepage or repository.
-See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info.
+[WARNING] manifest has no documentation, homepage or repository
+  |
+  = [NOTE] see https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info
 [ERROR] the source file of build script doesn't appear to exist.
 This may cause issue during packaging, as modules resolution and resources included via macros are often relative to the path of source files.
 Please update the `build` setting in the manifest at `[ROOT]/foo/Cargo.toml` and point to a path inside the root of the package.
@@ -4199,8 +4281,9 @@ Please update the `build` setting in the manifest at `[ROOT]/foo/Cargo.toml` and
     p.cargo("package -l")
         .with_status(101)
         .with_stderr_data(str![[r#"
-[WARNING] manifest has no documentation, homepage or repository.
-See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info.
+[WARNING] manifest has no documentation, homepage or repository
+  |
+  = [NOTE] see https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info
 [ERROR] the source file of build script doesn't appear to be a path inside of the package.
 It is at `[ROOT]/t_custom_build/custom_build.rs`, whereas the root the package is `[ROOT]/foo`.
 This may cause issue during packaging, as modules resolution and resources included via macros are often relative to the path of source files.
@@ -4233,8 +4316,9 @@ fn symlink_manifest_path() {
     cargo_process("package --no-verify --manifest-path")
         .arg(foo_symlink.join("Cargo.toml"))
         .with_stderr_data(str![[r#"
-[WARNING] manifest has no description, license, license-file, documentation, homepage or repository.
-See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info.
+[WARNING] manifest has no description, license, license-file, documentation, homepage or repository
+  |
+  = [NOTE] see https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info
 [PACKAGING] foo v1.0.0 ([ROOT]/foo-symlink)
 [PACKAGED] 6 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
 
@@ -4486,7 +4570,7 @@ fn discovery_inferred_build_rs_excluded() {
         .with_stdout_data("")
         .with_stderr_data(str![[r#"
 [PACKAGING] foo v0.0.1 ([ROOT]/foo)
-[WARNING] ignoring `package.build` as `build.rs` is not included in the published package
+[WARNING] ignoring `package.build` entry `build.rs` as it is not included in the published package
 [PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
 [VERIFYING] foo v0.0.1 ([ROOT]/foo)
 [COMPILING] foo v0.0.1 ([ROOT]/foo/target/package/foo-0.0.1)
@@ -4654,7 +4738,7 @@ fn discovery_explicit_build_rs_excluded() {
         .with_stdout_data("")
         .with_stderr_data(str![[r#"
 [PACKAGING] foo v0.0.1 ([ROOT]/foo)
-[WARNING] ignoring `package.build` as `build.rs` is not included in the published package
+[WARNING] ignoring `package.build` entry `build.rs` as it is not included in the published package
 [PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
 [VERIFYING] foo v0.0.1 ([ROOT]/foo)
 [COMPILING] foo v0.0.1 ([ROOT]/foo/target/package/foo-0.0.1)
@@ -5673,32 +5757,6 @@ fn workspace_with_local_deps() {
 
     p.cargo("package")
         .replace_crates_io(crates_io.index_url())
-        .with_status(101)
-        .with_stdout_data("")
-        .with_stderr_data(str![[r#"
-[PACKAGING] level3 v0.0.1 ([ROOT]/foo/level3)
-[PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
-[PACKAGING] level2 v0.0.1 ([ROOT]/foo/level2)
-[UPDATING] crates.io index
-[ERROR] failed to prepare local package for uploading
-
-Caused by:
-  no matching package named `level3` found
-  location searched: crates.io index
-  required by package `level2 v0.0.1 ([ROOT]/foo/level2)`
-
-"#]])
-        .run();
-}
-
-#[cargo_test]
-fn workspace_with_local_deps_nightly() {
-    let crates_io = registry::init();
-    let p = workspace_with_local_deps_project();
-
-    p.cargo("package -Zpackage-workspace")
-        .masquerade_as_nightly_cargo(&["package-workspace"])
-        .replace_crates_io(crates_io.index_url())
         .with_stdout_data("")
         .with_stderr_data(str![[r#"
 [PACKAGING] level3 v0.0.1 ([ROOT]/foo/level3)
@@ -5718,7 +5776,6 @@ fn workspace_with_local_deps_nightly() {
 [FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
 [VERIFYING] level1 v0.0.1 ([ROOT]/foo/level1)
 [UNPACKING] level2 v0.0.1 (registry `[ROOT]/foo/target/package/tmp-registry`)
-[COMPILING] level3 v0.0.1
 [COMPILING] level2 v0.0.1
 [COMPILING] level1 v0.0.1 ([ROOT]/foo/target/package/level1-0.0.1)
 [FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
@@ -5852,17 +5909,18 @@ fn workspace_with_local_dev_deps() {
         .file("dev_dep/src/lib.rs", "")
         .build();
 
-    p.cargo("package -Zpackage-workspace")
-        .masquerade_as_nightly_cargo(&["package-workspace"])
+    p.cargo("package")
         .replace_crates_io(crates_io.index_url())
         .with_stdout_data("")
         .with_stderr_data(str![[r#"
-[WARNING] manifest has no documentation, homepage or repository.
-See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info.
+[WARNING] manifest has no documentation, homepage or repository
+  |
+  = [NOTE] see https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info
 [PACKAGING] dev_dep v0.0.1 ([ROOT]/foo/dev_dep)
 [PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
-[WARNING] manifest has no documentation, homepage or repository.
-See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info.
+[WARNING] manifest has no documentation, homepage or repository
+  |
+  = [NOTE] see https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info
 [PACKAGING] main v0.0.1 ([ROOT]/foo/main)
 [UPDATING] crates.io index
 [PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
@@ -5944,31 +6002,6 @@ Caused by:
         .run();
 }
 
-#[cargo_test]
-fn workspace_with_local_deps_packaging_one_fails_nightly() {
-    let crates_io = registry::init();
-    let p = workspace_with_local_deps_packaging_one_fails_project();
-
-    // We can't package just level1, because there's a dependency on level2.
-    p.cargo("package -p level1 -Zpackage-workspace")
-        .masquerade_as_nightly_cargo(&["package-workspace"])
-        .replace_crates_io(crates_io.index_url())
-        .with_status(101)
-        .with_stdout_data("")
-        .with_stderr_data(str![[r#"
-[PACKAGING] level1 v0.0.1 ([ROOT]/foo/level1)
-[UPDATING] crates.io index
-[ERROR] failed to prepare local package for uploading
-
-Caused by:
-  no matching package named `level2` found
-  location searched: crates.io index
-  required by package `level1 v0.0.1 ([ROOT]/foo/level1)`
-
-"#]])
-        .run();
-}
-
 // Same as workspace_with_local_deps_packaging_one_fails except that we're
 // packaging a bin. This fails during lock-file generation instead of during verification.
 #[cargo_test]
@@ -6016,8 +6049,7 @@ fn workspace_with_local_deps_packaging_one_bin_fails() {
         .build();
 
     // We can't package just level1, because there's a dependency on level2.
-    p.cargo("package -p level1 -Zpackage-workspace")
-        .masquerade_as_nightly_cargo(&["package-workspace"])
+    p.cargo("package -p level1")
         .replace_crates_io(crates_io.index_url())
         .with_status(101)
         .with_stdout_data("")
@@ -6098,8 +6130,7 @@ fn workspace_with_local_deps_packaging_one_with_needed_deps() {
         .file("level3/src/lib.rs", "")
         .build();
 
-    p.cargo("package -p level2 -p level3 -Zpackage-workspace")
-        .masquerade_as_nightly_cargo(&["package-workspace"])
+    p.cargo("package -p level2 -p level3")
         .replace_crates_io(crates_io.index_url())
         .with_stdout_data("")
         .with_stderr_data(str![[r#"
@@ -6234,14 +6265,10 @@ fn workspace_with_local_deps_index_mismatch() {
         )
         .file("level2/src/lib.rs", "")
         .build();
-    p.cargo(&format!(
-        "package --index {} -Zpackage-workspace",
-        alt_reg.index_url()
-    ))
-    .masquerade_as_nightly_cargo(&["package-workspace"])
-    .with_status(101)
-    .with_stdout_data("")
-    .with_stderr_data(str![[r#"
+    p.cargo(&format!("package --index {}", alt_reg.index_url()))
+        .with_status(101)
+        .with_stdout_data("")
+        .with_stderr_data(str![[r#"
 [PACKAGING] level2 v0.0.1 ([ROOT]/foo/level2)
 [PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
 [PACKAGING] level1 v0.0.1 ([ROOT]/foo/level1)
@@ -6254,7 +6281,7 @@ Caused by:
   required by package `level1 v0.0.1 ([ROOT]/foo/level1)`
 
 "#]])
-    .run();
+        .run();
 }
 
 #[cargo_test]
@@ -6305,13 +6332,9 @@ fn workspace_with_local_deps_alternative_index() {
         .file("level2/src/lib.rs", "")
         .build();
 
-    p.cargo(&format!(
-        "package --index {} -Zpackage-workspace",
-        alt_reg.index_url()
-    ))
-    .masquerade_as_nightly_cargo(&["package-workspace"])
-    .with_stdout_data("")
-    .with_stderr_data(str![[r#"
+    p.cargo(&format!("package --index {}", alt_reg.index_url()))
+        .with_stdout_data("")
+        .with_stderr_data(str![[r#"
 [PACKAGING] level2 v0.0.1 ([ROOT]/foo/level2)
 [PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
 [PACKAGING] level1 v0.0.1 ([ROOT]/foo/level1)
@@ -6328,7 +6351,7 @@ fn workspace_with_local_deps_alternative_index() {
 [FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
 
 "#]])
-    .run();
+        .run();
 
     let index = alt_reg.index_url();
     let generated_lock = format!(
@@ -6419,37 +6442,6 @@ fn workspace_with_local_dep_already_published() {
 [PACKAGING] main v0.0.1 ([ROOT]/foo/main)
 [UPDATING] crates.io index
 [PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
-[VERIFYING] dep v0.1.0 ([ROOT]/foo/dep)
-[COMPILING] dep v0.1.0 ([ROOT]/foo/target/package/dep-0.1.0)
-[FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
-[VERIFYING] main v0.0.1 ([ROOT]/foo/main)
-[DOWNLOADING] crates ...
-[DOWNLOADED] dep v0.1.0
-[COMPILING] dep v0.1.0
-[COMPILING] main v0.0.1 ([ROOT]/foo/target/package/main-0.0.1)
-[FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
-[PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
-
-"#]]
-            .unordered(),
-        )
-        .run();
-}
-
-#[cargo_test]
-fn workspace_with_local_dep_already_published_nightly() {
-    let reg = registry::init();
-    let p = workspace_with_local_dep_already_published_project();
-
-    p.cargo("package -Zpackage-workspace")
-        .masquerade_as_nightly_cargo(&["package-workspace"])
-        .replace_crates_io(reg.index_url())
-        .with_stderr_data(
-            str![[r#"
-[PACKAGING] dep v0.1.0 ([ROOT]/foo/dep)
-[PACKAGING] main v0.0.1 ([ROOT]/foo/main)
-[UPDATING] crates.io index
-[PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
 [PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
 [VERIFYING] dep v0.1.0 ([ROOT]/foo/dep)
 [COMPILING] dep v0.1.0 ([ROOT]/foo/target/package/dep-0.1.0)
@@ -6514,8 +6506,7 @@ fn workspace_with_local_and_remote_deps() {
         .file("dep/src/lib.rs", "")
         .build();
 
-    p.cargo("package -Zpackage-workspace")
-        .masquerade_as_nightly_cargo(&["package-workspace"])
+    p.cargo("package")
         .replace_crates_io(reg.index_url())
         .with_stderr_data(
             str![[r#"
@@ -6587,8 +6578,7 @@ fn workspace_with_capitalized_member() {
         .file("dep/src/lib.rs", "")
         .build();
 
-    p.cargo("package -Zpackage-workspace --no-verify")
-        .masquerade_as_nightly_cargo(&["package-workspace"])
+    p.cargo("package --no-verify")
         .replace_crates_io(reg.index_url())
         .with_stderr_data(
             str![[r#"
@@ -6675,8 +6665,7 @@ fn workspace_with_renamed_member() {
         )
         .build();
 
-    p.cargo("package -Zpackage-workspace")
-        .masquerade_as_nightly_cargo(&["package-workspace"])
+    p.cargo("package")
         .replace_crates_io(reg.index_url())
         .with_stderr_data(
             str![[r#"
@@ -6697,7 +6686,6 @@ fn workspace_with_renamed_member() {
 [FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
 [VERIFYING] obeli-sk-utils v0.16.2 ([ROOT]/foo/crates/utils)
 [UNPACKING] obeli-sk-concepts v0.16.2 (registry `[ROOT]/foo/target/package/tmp-registry`)
-[COMPILING] obeli-sk-val-json v0.16.2
 [COMPILING] obeli-sk-concepts v0.16.2
 [COMPILING] obeli-sk-utils v0.16.2 ([ROOT]/foo/target/package/obeli-sk-utils-0.16.2)
 [FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
@@ -6755,8 +6743,7 @@ fn workspace_with_dot_rs_dir() {
         .file("crates/bar.rs/src/lib.rs", "pub fn foo() {}")
         .build();
 
-    p.cargo("package -Zpackage-workspace")
-        .masquerade_as_nightly_cargo(&["package-workspace"])
+    p.cargo("package")
         .replace_crates_io(reg.index_url())
         .with_stderr_data(
             str![[r#"
@@ -6801,8 +6788,7 @@ fn registry_not_in_publish_list() {
         .file("src/main.rs", "fn main() {}")
         .build();
 
-    p.cargo("package --registry alternative -Zpackage-workspace")
-        .masquerade_as_nightly_cargo(&["package-workspace"])
+    p.cargo("package --registry alternative")
         .with_status(101)
         .with_stderr_data(str![[r#"
 [ERROR] `foo` cannot be packaged.
@@ -6863,8 +6849,7 @@ fn registry_inferred_from_unique_option() {
         .file("dep/src/lib.rs", "")
         .build();
 
-    p.cargo("package -Zpackage-workspace")
-        .masquerade_as_nightly_cargo(&["package-workspace"])
+    p.cargo("package")
         .with_stderr_data(str![[r#"
 [PACKAGING] dep v0.1.0 ([ROOT]/foo/dep)
 [PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
@@ -6887,7 +6872,7 @@ fn registry_inferred_from_unique_option() {
 
 #[cargo_test]
 fn registry_not_inferred_because_of_conflict() {
-    let _alt_reg = registry::RegistryBuilder::new()
+    let alt_reg = registry::RegistryBuilder::new()
         .http_api()
         .http_index()
         .alternative()
@@ -6939,16 +6924,7 @@ fn registry_not_inferred_because_of_conflict() {
     p.cargo("package")
         .with_status(101)
         .with_stderr_data(str![[r#"
-[PACKAGING] dep v0.1.0 ([ROOT]/foo/dep)
-[PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
-[PACKAGING] main v0.0.1 ([ROOT]/foo/main)
-[UPDATING] `alternative` index
-[ERROR] failed to prepare local package for uploading
-
-Caused by:
-  no matching package named `dep` found
-  location searched: `alternative` index
-  required by package `main v0.0.1 ([ROOT]/foo/main)`
+[ERROR] conflicts between `package.publish` fields in the selected packages
 
 "#]])
         .run();
@@ -6956,21 +6932,7 @@ Caused by:
     p.cargo("package --exclude-lockfile")
         .with_status(101)
         .with_stderr_data(str![[r#"
-[PACKAGING] dep v0.1.0 ([ROOT]/foo/dep)
-[PACKAGED] 3 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
-[PACKAGING] main v0.0.1 ([ROOT]/foo/main)
-[PACKAGED] 3 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
-[VERIFYING] dep v0.1.0 ([ROOT]/foo/dep)
-[COMPILING] dep v0.1.0 ([ROOT]/foo/target/package/dep-0.1.0)
-[FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
-[VERIFYING] main v0.0.1 ([ROOT]/foo/main)
-[UPDATING] `alternative` index
-[ERROR] failed to verify package tarball
-
-Caused by:
-  no matching package named `dep` found
-  location searched: `alternative` index
-  required by package `main v0.0.1 ([ROOT]/foo/target/package/main-0.0.1)`
+[ERROR] conflicts between `package.publish` fields in the selected packages
 
 "#]])
         .run();
@@ -6978,112 +6940,12 @@ Caused by:
     p.cargo("package --no-verify")
         .with_status(101)
         .with_stderr_data(str![[r#"
-[PACKAGING] dep v0.1.0 ([ROOT]/foo/dep)
-[PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
-[PACKAGING] main v0.0.1 ([ROOT]/foo/main)
-[UPDATING] `alternative` index
-[ERROR] failed to prepare local package for uploading
-
-Caused by:
-  no matching package named `dep` found
-  location searched: `alternative` index
-  required by package `main v0.0.1 ([ROOT]/foo/main)`
+[ERROR] conflicts between `package.publish` fields in the selected packages
 
 "#]])
         .run();
 
     p.cargo("package --exclude-lockfile --no-verify")
-        .with_status(0)
-        .with_stderr_data(str![[r#"
-[PACKAGING] dep v0.1.0 ([ROOT]/foo/dep)
-[PACKAGED] 3 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
-[PACKAGING] main v0.0.1 ([ROOT]/foo/main)
-[PACKAGED] 3 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
-
-"#]])
-        .run();
-}
-
-#[cargo_test]
-fn registry_not_inferred_because_of_conflict_nightly() {
-    let alt_reg = registry::RegistryBuilder::new()
-        .http_api()
-        .http_index()
-        .alternative()
-        .build();
-
-    let p = project()
-        .file(
-            "Cargo.toml",
-            r#"
-            [workspace]
-            members = ["dep", "main"]
-            "#,
-        )
-        .file(
-            "main/Cargo.toml",
-            r#"
-            [package]
-            name = "main"
-            version = "0.0.1"
-            edition = "2015"
-            authors = []
-            license = "MIT"
-            description = "main"
-            repository = "bar"
-            publish = ["alternative"]
-
-            [dependencies]
-            dep = { path = "../dep", version = "0.1.0", registry = "alternative" }
-        "#,
-        )
-        .file("main/src/main.rs", "fn main() {}")
-        .file(
-            "dep/Cargo.toml",
-            r#"
-            [package]
-            name = "dep"
-            version = "0.1.0"
-            edition = "2015"
-            authors = []
-            license = "MIT"
-            description = "dep"
-            repository = "bar"
-            publish = ["alternative2"]
-        "#,
-        )
-        .file("dep/src/lib.rs", "")
-        .build();
-
-    p.cargo("package -Zpackage-workspace")
-        .masquerade_as_nightly_cargo(&["package-workspace"])
-        .with_status(101)
-        .with_stderr_data(str![[r#"
-[ERROR] conflicts between `package.publish` fields in the selected packages
-
-"#]])
-        .run();
-
-    p.cargo("package --exclude-lockfile -Zpackage-workspace")
-        .masquerade_as_nightly_cargo(&["package-workspace"])
-        .with_status(101)
-        .with_stderr_data(str![[r#"
-[ERROR] conflicts between `package.publish` fields in the selected packages
-
-"#]])
-        .run();
-
-    p.cargo("package --no-verify -Zpackage-workspace")
-        .masquerade_as_nightly_cargo(&["package-workspace"])
-        .with_status(101)
-        .with_stderr_data(str![[r#"
-[ERROR] conflicts between `package.publish` fields in the selected packages
-
-"#]])
-        .run();
-
-    p.cargo("package --exclude-lockfile --no-verify -Zpackage-workspace")
-        .masquerade_as_nightly_cargo(&["package-workspace"])
         .with_stderr_data(str![[r#"
 [PACKAGING] dep v0.1.0 ([ROOT]/foo/dep)
 [PACKAGED] 3 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
@@ -7093,8 +6955,7 @@ fn registry_not_inferred_because_of_conflict_nightly() {
 "#]])
         .run();
 
-    p.cargo("package -Zpackage-workspace --registry=alternative")
-        .masquerade_as_nightly_cargo(&["package-workspace"])
+    p.cargo("package --registry=alternative")
         .with_status(101)
         .with_stderr_data(str![[r#"
 [ERROR] `dep` cannot be packaged.
@@ -7103,12 +6964,8 @@ The registry `alternative` is not listed in the `package.publish` value in Cargo
 "#]])
         .run();
 
-    p.cargo(&format!(
-        "package --index {} -Zpackage-workspace",
-        alt_reg.index_url()
-    ))
-    .masquerade_as_nightly_cargo(&["package-workspace"])
-    .with_stderr_data(str![[r#"
+    p.cargo(&format!("package --index {}", alt_reg.index_url()))
+        .with_stderr_data(str![[r#"
 [PACKAGING] dep v0.1.0 ([ROOT]/foo/dep)
 [PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
 [PACKAGING] main v0.0.1 ([ROOT]/foo/main)
@@ -7125,7 +6982,7 @@ The registry `alternative` is not listed in the `package.publish` value in Cargo
 [FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
 
 "#]])
-    .run();
+        .run();
 }
 
 #[cargo_test]
@@ -7179,8 +7036,7 @@ fn registry_inference_ignores_unpublishable() {
         .file("dep/src/lib.rs", "")
         .build();
 
-    p.cargo("package -Zpackage-workspace")
-        .masquerade_as_nightly_cargo(&["package-workspace"])
+    p.cargo("package")
         .with_stderr_data(str![[r#"
 [PACKAGING] dep v0.1.0 ([ROOT]/foo/dep)
 [PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
@@ -7200,8 +7056,7 @@ fn registry_inference_ignores_unpublishable() {
 "#]])
         .run();
 
-    p.cargo("package -Zpackage-workspace --registry=alternative")
-        .masquerade_as_nightly_cargo(&["package-workspace"])
+    p.cargo("package --registry=alternative")
         .with_stderr_data(str![[r#"
 [PACKAGING] dep v0.1.0 ([ROOT]/foo/dep)
 [PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
@@ -7213,7 +7068,6 @@ fn registry_inference_ignores_unpublishable() {
 [FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
 [VERIFYING] main v0.0.1 ([ROOT]/foo/main)
 [UPDATING] `alternative` index
-[COMPILING] dep v0.1.0 (registry `alternative`)
 [COMPILING] main v0.0.1 ([ROOT]/foo/target/package/main-0.0.1)
 [FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
 
@@ -7272,24 +7126,18 @@ fn registry_not_inferred_because_of_multiple_options() {
         .file("dep/src/lib.rs", "")
         .build();
 
+    p.cargo("package")
+        .with_status(101)
+        .with_stderr_data(str![[r#"
+[ERROR] --registry is required to disambiguate between "alternative" or "alternative2" registries
+
+"#]])
+        .run();
+
     p.cargo("package --exclude-lockfile")
         .with_status(101)
         .with_stderr_data(str![[r#"
-[PACKAGING] dep v0.1.0 ([ROOT]/foo/dep)
-[PACKAGED] 3 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
-[PACKAGING] main v0.0.1 ([ROOT]/foo/main)
-[PACKAGED] 3 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
-[VERIFYING] dep v0.1.0 ([ROOT]/foo/dep)
-[COMPILING] dep v0.1.0 ([ROOT]/foo/target/package/dep-0.1.0)
-[FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
-[VERIFYING] main v0.0.1 ([ROOT]/foo/main)
-[UPDATING] `alternative` index
-[ERROR] failed to verify package tarball
-
-Caused by:
-  no matching package named `dep` found
-  location searched: `alternative` index
-  required by package `main v0.0.1 ([ROOT]/foo/target/package/main-0.0.1)`
+[ERROR] --registry is required to disambiguate between "alternative" or "alternative2" registries
 
 "#]])
         .run();
@@ -7297,112 +7145,12 @@ Caused by:
     p.cargo("package --no-verify")
         .with_status(101)
         .with_stderr_data(str![[r#"
-[PACKAGING] dep v0.1.0 ([ROOT]/foo/dep)
-[PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
-[PACKAGING] main v0.0.1 ([ROOT]/foo/main)
-[UPDATING] `alternative` index
-[ERROR] failed to prepare local package for uploading
-
-Caused by:
-  no matching package named `dep` found
-  location searched: `alternative` index
-  required by package `main v0.0.1 ([ROOT]/foo/main)`
+[ERROR] --registry is required to disambiguate between "alternative" or "alternative2" registries
 
 "#]])
         .run();
 
     p.cargo("package --exclude-lockfile --no-verify")
-        .with_status(0)
-        .with_stderr_data(str![[r#"
-[PACKAGING] dep v0.1.0 ([ROOT]/foo/dep)
-[PACKAGED] 3 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
-[PACKAGING] main v0.0.1 ([ROOT]/foo/main)
-[PACKAGED] 3 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
-
-"#]])
-        .run();
-}
-
-#[cargo_test]
-fn registry_not_inferred_because_of_multiple_options_nightly() {
-    let _alt_reg = registry::RegistryBuilder::new()
-        .http_api()
-        .http_index()
-        .alternative()
-        .build();
-
-    let p = project()
-        .file(
-            "Cargo.toml",
-            r#"
-            [workspace]
-            members = ["dep", "main"]
-            "#,
-        )
-        .file(
-            "main/Cargo.toml",
-            r#"
-            [package]
-            name = "main"
-            version = "0.0.1"
-            edition = "2015"
-            authors = []
-            license = "MIT"
-            description = "main"
-            repository = "bar"
-            publish = ["alternative", "alternative2"]
-
-            [dependencies]
-            dep = { path = "../dep", version = "0.1.0", registry = "alternative" }
-        "#,
-        )
-        .file("main/src/main.rs", "fn main() {}")
-        .file(
-            "dep/Cargo.toml",
-            r#"
-            [package]
-            name = "dep"
-            version = "0.1.0"
-            edition = "2015"
-            authors = []
-            license = "MIT"
-            description = "dep"
-            repository = "bar"
-            publish = ["alternative", "alternative2"]
-        "#,
-        )
-        .file("dep/src/lib.rs", "")
-        .build();
-
-    p.cargo("package -Zpackage-workspace")
-        .masquerade_as_nightly_cargo(&["package-workspace"])
-        .with_status(101)
-        .with_stderr_data(str![[r#"
-[ERROR] --registry is required to disambiguate between "alternative" or "alternative2" registries
-
-"#]])
-        .run();
-
-    p.cargo("package --exclude-lockfile -Zpackage-workspace")
-        .masquerade_as_nightly_cargo(&["package-workspace"])
-        .with_status(101)
-        .with_stderr_data(str![[r#"
-[ERROR] --registry is required to disambiguate between "alternative" or "alternative2" registries
-
-"#]])
-        .run();
-
-    p.cargo("package --no-verify -Zpackage-workspace")
-        .masquerade_as_nightly_cargo(&["package-workspace"])
-        .with_status(101)
-        .with_stderr_data(str![[r#"
-[ERROR] --registry is required to disambiguate between "alternative" or "alternative2" registries
-
-"#]])
-        .run();
-
-    p.cargo("package --exclude-lockfile --no-verify -Zpackage-workspace")
-        .masquerade_as_nightly_cargo(&["package-workspace"])
         .with_stderr_data(str![[r#"
 [PACKAGING] dep v0.1.0 ([ROOT]/foo/dep)
 [PACKAGED] 3 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
@@ -7412,8 +7160,7 @@ fn registry_not_inferred_because_of_multiple_options_nightly() {
 "#]])
         .run();
 
-    p.cargo("package -Zpackage-workspace --registry=alternative")
-        .masquerade_as_nightly_cargo(&["package-workspace"])
+    p.cargo("package --registry=alternative")
         .with_stderr_data(str![[r#"
 [PACKAGING] dep v0.1.0 ([ROOT]/foo/dep)
 [PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
@@ -7489,16 +7236,7 @@ fn registry_not_inferred_because_of_mismatch() {
     p.cargo("package")
         .with_status(101)
         .with_stderr_data(str![[r#"
-[PACKAGING] dep v0.1.0 ([ROOT]/foo/dep)
-[PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
-[PACKAGING] main v0.0.1 ([ROOT]/foo/main)
-[UPDATING] `alternative` index
-[ERROR] failed to prepare local package for uploading
-
-Caused by:
-  no matching package named `dep` found
-  location searched: `alternative` index
-  required by package `main v0.0.1 ([ROOT]/foo/main)`
+[ERROR] --registry is required because not all `package.publish` settings agree
 
 "#]])
         .run();
@@ -7506,21 +7244,7 @@ Caused by:
     p.cargo("package --exclude-lockfile")
         .with_status(101)
         .with_stderr_data(str![[r#"
-[PACKAGING] dep v0.1.0 ([ROOT]/foo/dep)
-[PACKAGED] 3 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
-[PACKAGING] main v0.0.1 ([ROOT]/foo/main)
-[PACKAGED] 3 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
-[VERIFYING] dep v0.1.0 ([ROOT]/foo/dep)
-[COMPILING] dep v0.1.0 ([ROOT]/foo/target/package/dep-0.1.0)
-[FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
-[VERIFYING] main v0.0.1 ([ROOT]/foo/main)
-[UPDATING] `alternative` index
-[ERROR] failed to verify package tarball
-
-Caused by:
-  no matching package named `dep` found
-  location searched: `alternative` index
-  required by package `main v0.0.1 ([ROOT]/foo/target/package/main-0.0.1)`
+[ERROR] --registry is required because not all `package.publish` settings agree
 
 "#]])
         .run();
@@ -7528,113 +7252,12 @@ Caused by:
     p.cargo("package --no-verify")
         .with_status(101)
         .with_stderr_data(str![[r#"
-[PACKAGING] dep v0.1.0 ([ROOT]/foo/dep)
-[PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
-[PACKAGING] main v0.0.1 ([ROOT]/foo/main)
-[UPDATING] `alternative` index
-[ERROR] failed to prepare local package for uploading
-
-Caused by:
-  no matching package named `dep` found
-  location searched: `alternative` index
-  required by package `main v0.0.1 ([ROOT]/foo/main)`
+[ERROR] --registry is required because not all `package.publish` settings agree
 
 "#]])
         .run();
 
     p.cargo("package --exclude-lockfile --no-verify")
-        .with_status(0)
-        .with_stderr_data(str![[r#"
-[PACKAGING] dep v0.1.0 ([ROOT]/foo/dep)
-[PACKAGED] 3 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
-[PACKAGING] main v0.0.1 ([ROOT]/foo/main)
-[PACKAGED] 3 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
-
-"#]])
-        .run();
-}
-
-#[cargo_test]
-fn registry_not_inferred_because_of_mismatch_nightly() {
-    let _alt_reg = registry::RegistryBuilder::new()
-        .http_api()
-        .http_index()
-        .alternative()
-        .build();
-
-    let p = project()
-        .file(
-            "Cargo.toml",
-            r#"
-            [workspace]
-            members = ["dep", "main"]
-            "#,
-        )
-        .file(
-            "main/Cargo.toml",
-            r#"
-            [package]
-            name = "main"
-            version = "0.0.1"
-            edition = "2015"
-            authors = []
-            license = "MIT"
-            description = "main"
-            repository = "bar"
-            publish = ["alternative"]
-
-            [dependencies]
-            dep = { path = "../dep", version = "0.1.0", registry = "alternative" }
-        "#,
-        )
-        .file("main/src/main.rs", "fn main() {}")
-        // No `publish` field means "any registry", but the presence of this package
-        // will stop us from inferring a registry.
-        .file(
-            "dep/Cargo.toml",
-            r#"
-            [package]
-            name = "dep"
-            version = "0.1.0"
-            edition = "2015"
-            authors = []
-            license = "MIT"
-            description = "dep"
-            repository = "bar"
-        "#,
-        )
-        .file("dep/src/lib.rs", "")
-        .build();
-
-    p.cargo("package -Zpackage-workspace")
-        .masquerade_as_nightly_cargo(&["package-workspace"])
-        .with_status(101)
-        .with_stderr_data(str![[r#"
-[ERROR] --registry is required because not all `package.publish` settings agree
-
-"#]])
-        .run();
-
-    p.cargo("package --exclude-lockfile -Zpackage-workspace")
-        .masquerade_as_nightly_cargo(&["package-workspace"])
-        .with_status(101)
-        .with_stderr_data(str![[r#"
-[ERROR] --registry is required because not all `package.publish` settings agree
-
-"#]])
-        .run();
-
-    p.cargo("package --no-verify -Zpackage-workspace")
-        .masquerade_as_nightly_cargo(&["package-workspace"])
-        .with_status(101)
-        .with_stderr_data(str![[r#"
-[ERROR] --registry is required because not all `package.publish` settings agree
-
-"#]])
-        .run();
-
-    p.cargo("package --exclude-lockfile --no-verify -Zpackage-workspace")
-        .masquerade_as_nightly_cargo(&["package-workspace"])
         .with_stderr_data(str![[r#"
 [PACKAGING] dep v0.1.0 ([ROOT]/foo/dep)
 [PACKAGED] 3 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
@@ -7644,8 +7267,7 @@ fn registry_not_inferred_because_of_mismatch_nightly() {
 "#]])
         .run();
 
-    p.cargo("package -Zpackage-workspace --registry=alternative")
-        .masquerade_as_nightly_cargo(&["package-workspace"])
+    p.cargo("package --registry=alternative")
         .with_stderr_data(str![[r#"
 [PACKAGING] dep v0.1.0 ([ROOT]/foo/dep)
 [PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
@@ -7716,8 +7338,7 @@ fn unpublishable_dependency() {
         .file("dep/src/lib.rs", "")
         .build();
 
-    p.cargo("package -Zpackage-workspace")
-        .masquerade_as_nightly_cargo(&["package-workspace"])
+    p.cargo("package")
         .with_status(101)
         .with_stderr_data(str![[r#"
 [PACKAGING] dep v0.1.0 ([ROOT]/foo/dep)
@@ -7767,8 +7388,9 @@ fn in_package_workspace_with_members_with_features_old() {
 
     p.cargo("package -p li --no-verify")
         .with_stderr_data(str![[r#"
-[WARNING] manifest has no documentation, homepage or repository.
-See https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info.
+[WARNING] manifest has no documentation, homepage or repository
+  |
+  = [NOTE] see https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info
 [PACKAGING] li v0.0.1 ([ROOT]/foo/li)
 [PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
 
@@ -7863,8 +7485,9 @@ fn git_core_symlinks_false() {
     p.cargo("package --allow-dirty")
         .with_stderr_data(str![[r#"
 [WARNING] found symbolic links that may be checked out as regular files for git repo at `[ROOT]/foo/`
-This might cause the `.crate` file to include incorrect or incomplete files
-[NOTE] to avoid this, set the Git config `core.symlinks` to `true`
+  |
+  = [NOTE] this might cause the `.crate` file to include incorrect or incomplete files
+  = [HELP] to avoid this, set the Git config `core.symlinks` to `true`
 ...
 [PACKAGING] bar v0.0.0 ([ROOT]/foo)
 [PACKAGED] 7 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
@@ -7988,39 +7611,6 @@ fn unpublished_cyclic_dev_dependencies() {
     );
 }
 
-#[cargo_test]
-fn unpublished_cyclic_dev_dependencies_nightly() {
-    registry::init();
-    let p = project()
-        .file(
-            "Cargo.toml",
-            r#"
-                [package]
-                name = "foo"
-                version = "0.0.1"
-                edition = "2015"
-                authors = []
-                license = "MIT"
-                description = "foo"
-                documentation = "foo"
-
-                [dev-dependencies]
-                foo = { path = ".", version = "0.0.1" }
-            "#,
-        )
-        .file("src/lib.rs", "")
-        .build();
-
-    p.cargo("package --no-verify --exclude-lockfile -Zpackage-workspace")
-        .masquerade_as_nightly_cargo(&["package-workspace"])
-        .with_stderr_data(str![[r#"
-[PACKAGING] foo v0.0.1 ([ROOT]/foo)
-[PACKAGED] 3 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
-
-"#]])
-        .run();
-}
-
 // A failing case from <https://github.com/rust-lang/cargo/issues/15059>
 #[cargo_test]
 fn unpublished_dependency() {
@@ -8071,4 +7661,149 @@ fn unpublished_dependency() {
         &["Cargo.toml", "Cargo.toml.orig", "src/lib.rs"],
         (),
     );
+}
+
+// This is a companion to `publish::checksum_changed`, but because this one
+// is packaging without dry-run, it should fail.
+#[cargo_test]
+fn checksum_changed() {
+    let registry = registry::RegistryBuilder::new()
+        .http_api()
+        .http_index()
+        .build();
+
+    Package::new("dep", "1.0.0").publish();
+    Package::new("transitive", "1.0.0")
+        .dep("dep", "1.0.0")
+        .publish();
+
+    let p = project()
+        .file(
+            "Cargo.toml",
+            r#"
+                [workspace]
+                members = ["dep"]
+
+                [package]
+                name = "foo"
+                version = "0.0.1"
+                edition = "2015"
+                authors = []
+                license = "MIT"
+                description = "foo"
+                documentation = "foo"
+
+                [dependencies]
+                dep = { path = "./dep", version = "1.0.0" }
+                transitive = "1.0.0"
+            "#,
+        )
+        .file("src/lib.rs", "")
+        .file(
+            "dep/Cargo.toml",
+            r#"
+                [package]
+                name = "dep"
+                version = "1.0.0"
+                edition = "2015"
+            "#,
+        )
+        .file("dep/src/lib.rs", "")
+        .build();
+
+    p.cargo("check").run();
+
+    p.cargo("package --workspace")
+        .replace_crates_io(registry.index_url())
+        .with_status(101)
+        .with_stderr_data(str![[r#"
+[WARNING] manifest has no description, license, license-file, documentation, homepage or repository
+  |
+  = [NOTE] see https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info
+[PACKAGING] dep v1.0.0 ([ROOT]/foo/dep)
+[PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
+[PACKAGING] foo v0.0.1 ([ROOT]/foo)
+[ERROR] failed to prepare local package for uploading
+
+Caused by:
+  checksum for `dep v1.0.0` changed between lock files
+
+  this could be indicative of a few possible errors:
+
+      * the lock file is corrupt
+      * a replacement source in use (e.g., a mirror) returned a different checksum
+      * the source itself may be corrupt in one way or another
+
+  unable to verify that `dep v1.0.0` is the same as when the lockfile was generated
+
+"#]])
+        .run();
+}
+
+#[cargo_test]
+fn publish_to_crates_io_warns() {
+    let p = project()
+        .file(
+            "Cargo.toml",
+            r#"
+                [package]
+                name = "foo"
+                version = "0.1.0"
+                description = "foo"
+                edition = "2015"
+            "#,
+        )
+        .file("src/main.rs", "fn main() {}")
+        .build();
+
+    p.cargo(&format!("publish --dry-run"))
+        .with_stderr_data(str![[r#"
+[UPDATING] crates.io index
+[WARNING] manifest has no license, license-file, documentation, homepage or repository
+  |
+  = [NOTE] see https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info
+[PACKAGING] foo v0.1.0 ([ROOT]/foo)
+[PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
+[VERIFYING] foo v0.1.0 ([ROOT]/foo)
+[COMPILING] foo v0.1.0 ([ROOT]/foo/target/package/foo-0.1.0)
+[FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
+[UPLOADING] foo v0.1.0 ([ROOT]/foo)
+[WARNING] aborting upload due to dry run
+
+"#]])
+        .run();
+}
+
+#[cargo_test]
+fn publish_to_alt_registry_warns() {
+    let _alt_reg = registry::RegistryBuilder::new().alternative().build();
+
+    let p = project()
+        .file(
+            "Cargo.toml",
+            r#"
+                [package]
+                name = "foo"
+                version = "0.1.0"
+                description = "foo"
+                edition = "2015"
+                publish = ["alternative"]
+            "#,
+        )
+        .file("src/main.rs", "fn main() {}")
+        .build();
+
+    p.cargo("publish --dry-run --registry alternative")
+        .with_stderr_data(str![[r#"
+[UPDATING] `alternative` index
+[PACKAGING] foo v0.1.0 ([ROOT]/foo)
+[PACKAGED] 4 files, [FILE_SIZE]B ([FILE_SIZE]B compressed)
+[VERIFYING] foo v0.1.0 ([ROOT]/foo)
+[COMPILING] foo v0.1.0 ([ROOT]/foo/target/package/foo-0.1.0)
+[FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
+[UPLOADING] foo v0.1.0 ([ROOT]/foo)
+[WARNING] aborting upload due to dry run
+
+"#]])
+        .run();
 }

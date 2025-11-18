@@ -2,11 +2,11 @@ use crate::core::compiler::artifact::match_artifacts_kind_with_targets;
 use crate::core::compiler::{CompileKind, CompileKindFallback, RustcTargetData};
 use crate::core::dependency::DepKind;
 use crate::core::package::SerializedPackage;
-use crate::core::resolver::{features::CliFeatures, HasDevUnits, Resolve};
+use crate::core::resolver::{HasDevUnits, Resolve, features::CliFeatures};
 use crate::core::{Package, PackageId, PackageIdSpec, Workspace};
 use crate::ops::{self, Packages};
-use crate::util::interning::InternedString;
 use crate::util::CargoResult;
+use crate::util::interning::InternedString;
 use cargo_platform::Platform;
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -52,11 +52,7 @@ pub fn output_metadata(ws: &Workspace<'_>, opt: &OutputMetadataOptions) -> Cargo
             .collect(),
         resolve,
         target_directory: ws.target_dir().into_path_unlocked(),
-        build_directory: ws
-            .gctx()
-            .cli_unstable()
-            .build_dir
-            .then(|| ws.build_dir().into_path_unlocked()),
+        build_directory: ws.build_dir().into_path_unlocked(),
         version: VERSION,
         workspace_root: ws.root().to_path_buf(),
         metadata: ws.custom_metadata().cloned(),
@@ -73,8 +69,7 @@ pub struct ExportInfo {
     workspace_default_members: Vec<PackageIdSpec>,
     resolve: Option<MetadataResolve>,
     target_directory: PathBuf,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    build_directory: Option<PathBuf>,
+    build_directory: PathBuf,
     version: u32,
     workspace_root: PathBuf,
     metadata: Option<toml::Value>,

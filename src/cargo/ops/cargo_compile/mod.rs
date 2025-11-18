@@ -39,12 +39,12 @@ use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
+use crate::core::compiler::UserIntent;
 use crate::core::compiler::unit_dependencies::build_unit_dependencies;
 use crate::core::compiler::unit_graph::{self, UnitDep, UnitGraph};
-use crate::core::compiler::UserIntent;
-use crate::core::compiler::{apply_env_config, standard_lib, CrateType, TargetInfo};
 use crate::core::compiler::{BuildConfig, BuildContext, BuildRunner, Compilation};
 use crate::core::compiler::{CompileKind, CompileTarget, RustcTargetData, Unit};
+use crate::core::compiler::{CrateType, TargetInfo, apply_env_config, standard_lib};
 use crate::core::compiler::{DefaultExecutor, Executor, UnitInterner};
 use crate::core::profiles::Profiles;
 use crate::core::resolver::features::{self, CliFeatures, FeaturesFor};
@@ -52,15 +52,18 @@ use crate::core::resolver::{HasDevUnits, Resolve};
 use crate::core::{PackageId, PackageSet, SourceId, TargetKind, Workspace};
 use crate::drop_println;
 use crate::ops;
-use crate::ops::resolve::WorkspaceResolve;
+use crate::ops::resolve::{SpecsAndResolvedFeatures, WorkspaceResolve};
+use crate::util::BuildLogger;
 use crate::util::context::{GlobalContext, WarningHandling};
 use crate::util::interning::InternedString;
+use crate::util::log_message::LogMessage;
 use crate::util::{CargoResult, StableHasher};
 
 mod compile_filter;
+use annotate_snippets::Level;
 pub use compile_filter::{CompileFilter, FilterRule, LibRule};
 
-mod unit_generator;
+pub(super) mod unit_generator;
 use unit_generator::UnitGenerator;
 
 mod packages;
@@ -140,7 +143,8 @@ pub fn compile_with_exec<'a>(
 ) -> CargoResult<Compilation<'a>> {
     ws.emit_warnings()?;
     let compilation = compile_ws(ws, options, exec)?;
-    if ws.gctx().warning_handling()? == WarningHandling::Deny && compilation.warning_count > 0 {
+    if ws.gctx().warning_handling()? == WarningHandling::Deny && compilation.lint_warning_count > 0
+    {
         anyhow::bail!("warnings are denied by `build.warnings` configuration")
     }
     Ok(compilation)
@@ -154,7 +158,24 @@ pub fn compile_ws<'a>(
     exec: &Arc<dyn Executor>,
 ) -> CargoResult<Compilation<'a>> {
     let interner = UnitInterner::new();
-    let bcx = create_bcx(ws, options, &interner)?;
+    let logger = BuildLogger::maybe_new(ws)?;
+
+    if let Some(ref logger) = logger {
+        let rustc = ws.gctx().load_global_rustc(Some(ws))?;
+        logger.log(LogMessage::BuildStarted {
+            cwd: ws.gctx().cwd().to_path_buf(),
+            host: rustc.host.to_string(),
+            jobs: options.build_config.jobs,
+            profile: options.build_config.requested_profile.to_string(),
+            rustc_version: rustc.version.to_string(),
+            rustc_version_verbose: rustc.verbose_version.clone(),
+            target_dir: ws.target_dir().as_path_unlocked().to_path_buf(),
+            workspace_root: ws.root().to_path_buf(),
+        });
+    }
+
+    let bcx = create_bcx(ws, options, &interner, logger.as_ref())?;
+
     if options.build_config.unit_graph {
         unit_graph::emit_serialized_unit_graph(&bcx.roots, &bcx.unit_graph, ws.gctx())?;
         return Compilation::new(&bcx);
@@ -212,6 +233,7 @@ pub fn create_bcx<'a, 'gctx>(
     ws: &'a Workspace<'gctx>,
     options: &'a CompileOptions,
     interner: &'a UnitInterner,
+    logger: Option<&'a BuildLogger>,
 ) -> CargoResult<BuildContext<'a, 'gctx>> {
     let CompileOptions {
         ref build_config,
@@ -230,15 +252,23 @@ pub fn create_bcx<'a, 'gctx>(
     match build_config.intent {
         UserIntent::Test | UserIntent::Build | UserIntent::Check { .. } | UserIntent::Bench => {
             if ws.gctx().get_env("RUST_FLAGS").is_ok() {
-                gctx.shell().warn(
-                    "Cargo does not read `RUST_FLAGS` environment variable. Did you mean `RUSTFLAGS`?",
+                gctx.shell().print_report(
+                    &[Level::WARNING
+                        .secondary_title("ignoring environment variable `RUST_FLAGS`")
+                        .element(Level::HELP.message("rust flags are passed via `RUSTFLAGS`"))],
+                    false,
                 )?;
             }
         }
         UserIntent::Doc { .. } | UserIntent::Doctest => {
             if ws.gctx().get_env("RUSTDOC_FLAGS").is_ok() {
-                gctx.shell().warn(
-                    "Cargo does not read `RUSTDOC_FLAGS` environment variable. Did you mean `RUSTDOCFLAGS`?"
+                gctx.shell().print_report(
+                    &[Level::WARNING
+                        .secondary_title("ignoring environment variable `RUSTDOC_FLAGS`")
+                        .element(
+                            Level::HELP.message("rustdoc flags are passed via `RUSTDOCFLAGS`"),
+                        )],
+                    false,
                 )?;
             }
         }
@@ -284,7 +314,7 @@ pub fn create_bcx<'a, 'gctx>(
         mut pkg_set,
         workspace_resolve,
         targeted_resolve: resolve,
-        resolved_features,
+        specs_and_features,
     } = resolve;
 
     let std_resolve_features = if let Some(crates) = &gctx.cli_unstable().build_std {
@@ -363,72 +393,91 @@ pub fn create_bcx<'a, 'gctx>(
         })
         .collect();
 
-    // Passing `build_config.requested_kinds` instead of
-    // `explicit_host_kinds` here so that `generate_root_units` can do
-    // its own special handling of `CompileKind::Host`. It will
-    // internally replace the host kind by the `explicit_host_kind`
-    // before setting as a unit.
-    let generator = UnitGenerator {
-        ws,
-        packages: &to_builds,
-        spec,
-        target_data: &target_data,
-        filter,
-        requested_kinds: &build_config.requested_kinds,
-        explicit_host_kind,
-        intent: build_config.intent,
-        resolve: &resolve,
-        workspace_resolve: &workspace_resolve,
-        resolved_features: &resolved_features,
-        package_set: &pkg_set,
-        profiles: &profiles,
-        interner,
-        has_dev_units,
-    };
-    let mut units = generator.generate_root_units()?;
+    let mut units = Vec::new();
+    let mut unit_graph = HashMap::new();
+    let mut scrape_units = Vec::new();
 
-    if let Some(args) = target_rustc_crate_types {
-        override_rustc_crate_types(&mut units, args, interner)?;
-    }
-
-    let should_scrape = build_config.intent.is_doc() && gctx.cli_unstable().rustdoc_scrape_examples;
-    let mut scrape_units = if should_scrape {
-        generator.generate_scrape_units(&units)?
-    } else {
-        Vec::new()
-    };
-
-    let std_roots = if let Some(crates) = gctx.cli_unstable().build_std.as_ref() {
-        let (std_resolve, std_features) = std_resolve_features.as_ref().unwrap();
-        standard_lib::generate_std_roots(
-            &crates,
-            &units,
-            std_resolve,
-            std_features,
-            &explicit_host_kinds,
-            &pkg_set,
+    for SpecsAndResolvedFeatures {
+        specs,
+        resolved_features,
+    } in &specs_and_features
+    {
+        // Passing `build_config.requested_kinds` instead of
+        // `explicit_host_kinds` here so that `generate_root_units` can do
+        // its own special handling of `CompileKind::Host`. It will
+        // internally replace the host kind by the `explicit_host_kind`
+        // before setting as a unit.
+        let spec_names = specs.iter().map(|spec| spec.name()).collect::<Vec<_>>();
+        let packages = to_builds
+            .iter()
+            .filter(|package| spec_names.contains(&package.name().as_str()))
+            .cloned()
+            .collect::<Vec<_>>();
+        let generator = UnitGenerator {
+            ws,
+            packages: &packages,
+            spec,
+            target_data: &target_data,
+            filter,
+            requested_kinds: &build_config.requested_kinds,
+            explicit_host_kind,
+            intent: build_config.intent,
+            resolve: &resolve,
+            workspace_resolve: &workspace_resolve,
+            resolved_features: &resolved_features,
+            package_set: &pkg_set,
+            profiles: &profiles,
             interner,
-            &profiles,
-            &target_data,
-        )?
-    } else {
-        Default::default()
-    };
+            has_dev_units,
+        };
+        let mut targeted_root_units = generator.generate_root_units()?;
 
-    let mut unit_graph = build_unit_dependencies(
-        ws,
-        &pkg_set,
-        &resolve,
-        &resolved_features,
-        std_resolve_features.as_ref(),
-        &units,
-        &scrape_units,
-        &std_roots,
-        build_config.intent,
-        &target_data,
-        &profiles,
-        interner,
-    )?;
+        if let Some(args) = target_rustc_crate_types {
+            override_rustc_crate_types(&mut targeted_root_units, args, interner)?;
+        }
+
+        let should_scrape =
+            build_config.intent.is_doc() && gctx.cli_unstable().rustdoc_scrape_examples;
+        let targeted_scrape_units = if should_scrape {
+            generator.generate_scrape_units(&targeted_root_units)?
+        } else {
+            Vec::new()
+        };
+
+        let std_roots = if let Some(crates) = gctx.cli_unstable().build_std.as_ref() {
+            let (std_resolve, std_features) = std_resolve_features.as_ref().unwrap();
+            standard_lib::generate_std_roots(
+                &crates,
+                &targeted_root_units,
+                std_resolve,
+                std_features,
+                &explicit_host_kinds,
+                &pkg_set,
+                interner,
+                &profiles,
+                &target_data,
+            )?
+        } else {
+            Default::default()
+        };
+
+        unit_graph.extend(build_unit_dependencies(
+            ws,
+            &pkg_set,
+            &resolve,
+            &resolved_features,
+            std_resolve_features.as_ref(),
+            &targeted_root_units,
+            &targeted_scrape_units,
+            &std_roots,
+            build_config.intent,
+            &target_data,
+            &profiles,
+            interner,
+        )?);
+        units.extend(targeted_root_units);
+        scrape_units.extend(targeted_scrape_units);
+    }
 
     // TODO: In theory, Cargo should also dedupe the roots, but I'm uncertain
     // what heuristics to use in that case.
@@ -542,6 +591,7 @@ where `<compatible-ver>` is the latest version supporting rustc {rustc_version}"
 
     let bcx = BuildContext::new(
         ws,
+        logger,
         pkg_set,
         build_config,
         profiles,

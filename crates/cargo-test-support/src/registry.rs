@@ -39,16 +39,16 @@
 //!     "#)
 //!     .build();
 //!
-//! p.cargo("run").with_stdout_data(str!["24"]).run();
+//! // p.cargo("run").with_stdout_data(str!["24"]).run();
 //! ```
 
 use crate::git::repo;
 use crate::paths;
 use crate::publish::{create_index_line, write_to_index};
-use cargo_util::paths::append;
 use cargo_util::Sha256;
-use flate2::write::GzEncoder;
+use cargo_util::paths::append;
 use flate2::Compression;
+use flate2::write::GzEncoder;
 use pasetors::keys::{AsymmetricPublicKey, AsymmetricSecretKey};
 use pasetors::paserk::FormatAsPaserk;
 use pasetors::token::UntrustedToken;
@@ -64,7 +64,7 @@ use time::format_description::well_known::Rfc3339;
 use time::{Duration, OffsetDateTime};
 use url::Url;
 
-/// Path to the local index for psuedo-crates.io.
+/// Path to the local index for pseudo-crates.io.
 ///
 /// This is a Git repo
 /// initialized with a `config.json` file pointing to `dl_path` for downloads
@@ -282,14 +282,14 @@ impl RegistryBuilder {
         self
     }
 
-    /// Sets whether or not to initialize as an alternative registry.
+    /// Initializes as an alternative registry with the given name.
     #[must_use]
     pub fn alternative_named(mut self, alt: &str) -> Self {
         self.alternative = Some(alt.to_string());
         self
     }
 
-    /// Sets whether or not to initialize as an alternative registry.
+    /// Initializes as an alternative registry named "alternative".
     #[must_use]
     pub fn alternative(self) -> Self {
         self.alternative_named("alternative")
@@ -622,7 +622,7 @@ struct PackageFile {
 
 const DEFAULT_MODE: u32 = 0o644;
 
-/// Setup a local psuedo-crates.io [`TestRegistry`]
+/// Setup a local pseudo-crates.io [`TestRegistry`]
 ///
 /// This is implicitly called by [`Package::new`].
 ///

@@ -3,12 +3,13 @@
 use std::fs;
 use std::str;
 
+use crate::prelude::*;
+use crate::utils::tools;
 use cargo::core::compiler::RustDocFingerprint;
-use cargo_test_support::prelude::*;
 use cargo_test_support::registry::Package;
 use cargo_test_support::str;
 use cargo_test_support::{basic_lib_manifest, basic_manifest, git, project};
-use cargo_test_support::{rustc_host, symlink_supported, tools};
+use cargo_test_support::{rustc_host, symlink_supported};
 
 #[cargo_test]
 fn simple() {
@@ -296,12 +297,10 @@ fn doc_multiple_targets_same_name() {
 
     p.cargo("doc --workspace")
         .with_stderr_data(str![[r#"
-[WARNING] output filename collision.
-The bin target `foo_lib` in package `foo v0.1.0 ([ROOT]/foo/foo)` has the same output filename as the lib target `foo_lib` in package `bar v0.1.0 ([ROOT]/foo/bar)`.
-Colliding filename is: [ROOT]/foo/target/doc/foo_lib/index.html
-The targets should have unique names.
-This is a known bug where multiple crates with the same name use
-the same path; see <https://github.com/rust-lang/cargo/issues/6313>.
+[WARNING] output filename collision at [ROOT]/foo/target/doc/foo_lib/index.html
+  |
+  = [NOTE] this is a known bug where multiple crates with the same name use the same path; see <https://github.com/rust-lang/cargo/issues/6313>
+  = [NOTE] the bin target `foo_lib` in package `foo v0.1.0 ([ROOT]/foo/foo)` has the same output filename as the lib target `foo_lib` in package `bar v0.1.0 ([ROOT]/foo/bar)`
 [DOCUMENTING] bar v0.1.0 ([ROOT]/foo/bar)
 [DOCUMENTING] foo v0.1.0 ([ROOT]/foo/foo)
 [FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
@@ -512,12 +511,10 @@ fn doc_lib_bin_same_name_documents_named_bin_when_requested() {
         // The checking/documenting lines are sometimes swapped since they run
         // concurrently.
         .with_stderr_data(str![[r#"
-[WARNING] output filename collision.
-The bin target `foo` in package `foo v0.0.1 ([ROOT]/foo)` has the same output filename as the lib target `foo` in package `foo v0.0.1 ([ROOT]/foo)`.
-Colliding filename is: [ROOT]/foo/target/doc/foo/index.html
-The targets should have unique names.
-This is a known bug where multiple crates with the same name use
-the same path; see <https://github.com/rust-lang/cargo/issues/6313>.
+[WARNING] output filename collision at [ROOT]/foo/target/doc/foo/index.html
+  |
+  = [NOTE] the bin target `foo` in package `foo v0.0.1 ([ROOT]/foo)` has the same output filename as the lib target `foo` in package `foo v0.0.1 ([ROOT]/foo)`
+  = [NOTE] this is a known bug where multiple crates with the same name use the same path; see <https://github.com/rust-lang/cargo/issues/6313>
 [CHECKING] foo v0.0.1 ([ROOT]/foo)
 [DOCUMENTING] foo v0.0.1 ([ROOT]/foo)
 [FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
@@ -556,12 +553,10 @@ fn doc_lib_bin_same_name_documents_bins_when_requested() {
         // The checking/documenting lines are sometimes swapped since they run
         // concurrently.
         .with_stderr_data(str![[r#"
-[WARNING] output filename collision.
-The bin target `foo` in package `foo v0.0.1 ([ROOT]/foo)` has the same output filename as the lib target `foo` in package `foo v0.0.1 ([ROOT]/foo)`.
-Colliding filename is: [ROOT]/foo/target/doc/foo/index.html
-The targets should have unique names.
-This is a known bug where multiple crates with the same name use
-the same path; see <https://github.com/rust-lang/cargo/issues/6313>.
+[WARNING] output filename collision at [ROOT]/foo/target/doc/foo/index.html
+  |
+  = [NOTE] the bin target `foo` in package `foo v0.0.1 ([ROOT]/foo)` has the same output filename as the lib target `foo` in package `foo v0.0.1 ([ROOT]/foo)`
+  = [NOTE] this is a known bug where multiple crates with the same name use the same path; see <https://github.com/rust-lang/cargo/issues/6313>
 [CHECKING] foo v0.0.1 ([ROOT]/foo)
 [DOCUMENTING] foo v0.0.1 ([ROOT]/foo)
 [FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
@@ -833,10 +828,11 @@ fn doc_target() {
 
     p.cargo("doc --verbose --target").arg(TARGET).run();
     assert!(p.root().join(&format!("target/{}/doc", TARGET)).is_dir());
-    assert!(p
-        .root()
-        .join(&format!("target/{}/doc/foo/index.html", TARGET))
-        .is_file());
+    assert!(
+        p.root()
+            .join(&format!("target/{}/doc/foo/index.html", TARGET))
+            .is_file()
+    );
 }
 
 #[cargo_test]
@@ -1406,12 +1402,10 @@ fn doc_all_member_dependency_same_name() {
 [LOCKING] 1 package to latest compatible version
 [DOWNLOADING] crates ...
 [DOWNLOADED] bar v0.1.0 (registry `dummy-registry`)
-[WARNING] output filename collision.
-The lib target `bar` in package `bar v0.1.0` has the same output filename as the lib target `bar` in package `bar v0.1.0 ([ROOT]/foo/bar)`.
-Colliding filename is: [ROOT]/foo/target/doc/bar/index.html
-The targets should have unique names.
-This is a known bug where multiple crates with the same name use
-the same path; see <https://github.com/rust-lang/cargo/issues/6313>.
+[WARNING] output filename collision at [ROOT]/foo/target/doc/bar/index.html
+  |
+  = [NOTE] the lib target `bar` in package `bar v0.1.0` has the same output filename as the lib target `bar` in package `bar v0.1.0 ([ROOT]/foo/bar)`
+  = [NOTE] this is a known bug where multiple crates with the same name use the same path; see <https://github.com/rust-lang/cargo/issues/6313>
 [DOCUMENTING] bar v0.1.0
 [CHECKING] bar v0.1.0
 [DOCUMENTING] bar v0.1.0 ([ROOT]/foo/bar)
@@ -1758,10 +1752,11 @@ fn doc_private_items() {
     foo.cargo("doc --document-private-items").run();
 
     assert!(foo.root().join("target/doc").is_dir());
-    assert!(foo
-        .root()
-        .join("target/doc/foo/private/index.html")
-        .is_file());
+    assert!(
+        foo.root()
+            .join("target/doc/foo/private/index.html")
+            .is_file()
+    );
 }
 
 #[cargo_test]
@@ -2040,12 +2035,13 @@ fn doc_example() {
         .build();
 
     p.cargo("doc").run();
-    assert!(p
-        .build_dir()
-        .join("doc")
-        .join("ex1")
-        .join("fn.x.html")
-        .exists());
+    assert!(
+        p.build_dir()
+            .join("doc")
+            .join("ex1")
+            .join("fn.x.html")
+            .exists()
+    );
 }
 
 #[cargo_test]
@@ -2106,12 +2102,13 @@ fn doc_example_with_deps() {
         .build();
 
     p.cargo("doc --examples").run();
-    assert!(p
-        .build_dir()
-        .join("doc")
-        .join("ex")
-        .join("fn.x.html")
-        .exists());
+    assert!(
+        p.build_dir()
+            .join("doc")
+            .join("ex")
+            .join("fn.x.html")
+            .exists()
+    );
 }
 
 #[cargo_test]
@@ -2154,15 +2151,17 @@ fn bin_private_items() {
     assert!(p.root().join("target/doc/foo/index.html").is_file());
     assert!(p.root().join("target/doc/foo/fn.foo_pub.html").is_file());
     assert!(p.root().join("target/doc/foo/fn.foo_priv.html").is_file());
-    assert!(p
-        .root()
-        .join("target/doc/foo/struct.FooStruct.html")
-        .is_file());
+    assert!(
+        p.root()
+            .join("target/doc/foo/struct.FooStruct.html")
+            .is_file()
+    );
     assert!(p.root().join("target/doc/foo/enum.FooEnum.html").is_file());
-    assert!(p
-        .root()
-        .join("target/doc/foo/trait.FooTrait.html")
-        .is_file());
+    assert!(
+        p.root()
+            .join("target/doc/foo/trait.FooTrait.html")
+            .is_file()
+    );
     assert!(p.root().join("target/doc/foo/type.FooType.html").is_file());
     assert!(p.root().join("target/doc/foo/foo_mod/index.html").is_file());
 }
@@ -2620,11 +2619,13 @@ LLVM version: 9.0
     // It should also remove the bogus file we created above.
     dummy_project.cargo("doc --target").arg(rustc_host()).run();
 
-    assert!(!dummy_project
-        .build_dir()
-        .join(rustc_host())
-        .join("doc/bogus_file")
-        .exists());
+    assert!(
+        !dummy_project
+            .build_dir()
+            .join(rustc_host())
+            .join("doc/bogus_file")
+            .exists()
+    );
 
     let fingerprint: RustDocFingerprint =
         serde_json::from_str(&dummy_project.read_file("target/.rustdoc_fingerprint.json"))

@@ -21,17 +21,17 @@
 //! The precedence is explained in [`ProfileMaker`].
 //! The algorithm happens within [`ProfileMaker::get_profile`].
 
+use crate::core::Feature;
 use crate::core::compiler::{CompileKind, CompileTarget, Unit};
 use crate::core::dependency::Artifact;
 use crate::core::resolver::features::FeaturesFor;
-use crate::core::Feature;
 use crate::core::{
     PackageId, PackageIdSpec, PackageIdSpecQuery, Resolve, Shell, Target, Workspace,
 };
 use crate::util::interning::InternedString;
 use crate::util::toml::validate_profile;
-use crate::util::{closest_msg, context, CargoResult, GlobalContext};
-use anyhow::{bail, Context as _};
+use crate::util::{CargoResult, GlobalContext, closest_msg, context};
+use anyhow::{Context as _, bail};
 use cargo_util_schemas::manifest::TomlTrimPaths;
 use cargo_util_schemas::manifest::TomlTrimPathsValue;
 use cargo_util_schemas::manifest::{
@@ -561,6 +561,7 @@ fn merge_profile(profile: &mut Profile, toml: &TomlProfile) {
         profile.panic = match panic.as_str() {
             "unwind" => PanicStrategy::Unwind,
             "abort" => PanicStrategy::Abort,
+            "immediate-abort" => PanicStrategy::ImmediateAbort,
             // This should be validated in TomlProfile::validate
             _ => panic!("Unexpected panic setting `{}`", panic),
         };
@@ -578,7 +579,7 @@ fn merge_profile(profile: &mut Profile, toml: &TomlProfile) {
         profile.trim_paths = Some(trim_paths.clone());
     }
     if let Some(hint_mostly_unused) = toml.hint_mostly_unused {
-        profile.hint_mostly_unused = hint_mostly_unused;
+        profile.hint_mostly_unused = Some(hint_mostly_unused);
     }
     profile.strip = match toml.strip {
         Some(StringOrBool::Bool(true)) => Strip::Resolved(StripInner::Named("symbols".into())),
@@ -623,14 +624,14 @@ pub struct Profile {
     pub incremental: bool,
     pub panic: PanicStrategy,
     pub strip: Strip,
-    #[serde(skip_serializing_if = "Vec::is_empty")] // remove when `rustflags` is stablized
+    #[serde(skip_serializing_if = "Vec::is_empty")] // remove when `rustflags` is stabilized
     // Note that `rustflags` is used for the cargo-feature `profile_rustflags`
     pub rustflags: Vec<InternedString>,
-    // remove when `-Ztrim-paths` is stablized
+    // remove when `-Ztrim-paths` is stabilized
     #[serde(skip_serializing_if = "Option::is_none")]
     pub trim_paths: Option<TomlTrimPaths>,
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub hint_mostly_unused: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hint_mostly_unused: Option<bool>,
 }
 
 impl Default for Profile {
@@ -652,7 +653,7 @@ impl Default for Profile {
             strip: Strip::Deferred(StripInner::None),
             rustflags: vec![],
             trim_paths: None,
-            hint_mostly_unused: false,
+            hint_mostly_unused: None,
         }
     }
 }
@@ -872,10 +873,11 @@ impl serde::ser::Serialize for Lto {
 
 /// The `panic` setting.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, PartialOrd, Ord, serde::Serialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "kebab-case")]
 pub enum PanicStrategy {
     Unwind,
     Abort,
+    ImmediateAbort,
 }
 
 impl fmt::Display for PanicStrategy {
@@ -883,6 +885,7 @@ impl fmt::Display for PanicStrategy {
         match *self {
             PanicStrategy::Unwind => "unwind",
             PanicStrategy::Abort => "abort",
+            PanicStrategy::ImmediateAbort => "immediate-abort",
         }
         .fmt(f)
     }

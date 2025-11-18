@@ -1,12 +1,438 @@
 # Changelog
 
+## Cargo 1.93 (2026-01-22)
+[344c4567...HEAD](https://github.com/rust-lang/cargo/compare/344c4567...HEAD)
+
+### Added
+
+### Changed
+
+- Migrate more diagnostic formatting to rustc-like style (annotate-snippets style)
+  [#16143](https://github.com/rust-lang/cargo/pull/16143)
+
+### Fixed
+
+- Shell completion variables no longer leak into user's environment
+  [#16144](https://github.com/rust-lang/cargo/pull/16144)
+
+### Nightly only
+
+- `-Zbuild-analysis`: Emit timing-info logs with JSONL-based logging
+  infrastructure. Logs are stored in `~/.cargo/log/` with unique files
+  per cargo invocation.
+  [#16150](https://github.com/rust-lang/cargo/pull/16150)
+  [#16179](https://github.com/rust-lang/cargo/pull/16179)
+- `-Zconfig-include`: Allow using `optional = true` to silently skip
+  missing config files.
+  [#16103](https://github.com/rust-lang/cargo/pull/16103)
+  [#16174](https://github.com/rust-lang/cargo/pull/16174)
+  [#16180](https://github.com/rust-lang/cargo/pull/16180)
+- `-Zgit`: Support shallow fetch for Git CLI backend (`net.git-fetch-with-cli`)
+  [#16156](https://github.com/rust-lang/cargo/pull/16156)
+- `-Zgit`: Add more git fetch-index backend interop tests
+  [#16162](https://github.com/rust-lang/cargo/pull/16162)
+- `-Zscript`: Update script tests from rustc's test suite
+  [#16169](https://github.com/rust-lang/cargo/pull/16169)
+
+### Documentation
+
+### Internal
+
+- Fix mdman to not incorrectly strip `<p>` tags
+  [#16158](https://github.com/rust-lang/cargo/pull/16158)
+  [#16172](https://github.com/rust-lang/cargo/pull/16172)
+- Update dependencies.
+  [#16137](https://github.com/rust-lang/cargo/pull/16137)
+  [#16140](https://github.com/rust-lang/cargo/pull/16140)
+
+## Cargo 1.92 (2025-12-11)
+[24bb93c3...rust-1.92.0](https://github.com/rust-lang/cargo/compare/24bb93c3...rust-1.92.0)
+
+### Added
+
+- Add Ghostty as a supported terminal for term integration (OSC 9;4)
+  [#15977](https://github.com/rust-lang/cargo/pull/15977)
+- Add retry for `git fetch` failures in `net.git-fetch-with-cli` path
+  [#16016](https://github.com/rust-lang/cargo/pull/16016)
+
+### Changed
+
+- Migrate some diagnostic formatting to rustc-like style (annotate-snippets style)
+  [#15943](https://github.com/rust-lang/cargo/pull/15943)
+  [#15945](https://github.com/rust-lang/cargo/pull/15945)
+  [#16019](https://github.com/rust-lang/cargo/pull/16019)
+  [#16035](https://github.com/rust-lang/cargo/pull/16035)
+  [#16066](https://github.com/rust-lang/cargo/pull/16066)
+  [#16113](https://github.com/rust-lang/cargo/pull/16113)
+  [#16126](https://github.com/rust-lang/cargo/pull/16126)
+- Suggested `cargo fix` command from compilation diagnostics is now more accurate.
+  [#16127](https://github.com/rust-lang/cargo/pull/16127)
+- Prefer unicode ellipses when truncating progress
+  [#15955](https://github.com/rust-lang/cargo/pull/15955)
+- Eliminate the last three "did you mean" warning phrasings
+  [#15356](https://github.com/rust-lang/cargo/pull/15356)
+- Clarify warning for using `features` or `default-features` in `patch`
+  [#15953](https://github.com/rust-lang/cargo/pull/15953)
+- Config parsing errors now show more precise key path with array index
+  [#16004](https://github.com/rust-lang/cargo/pull/16004)
+- Improve error message for `rust-version` incompatibility diagnostics
+  [#16021](https://github.com/rust-lang/cargo/pull/16021)
+- cargo-add: Report a missing source error for workspace dependencies
+  [#16063](https://github.com/rust-lang/cargo/pull/16063)
+- cargo-info: Suggest a more universal `cargo tree` command
+  [#15954](https://github.com/rust-lang/cargo/pull/15954)
+- cargo-publish: Switch the 'ctrl-c on wait' line to a help message
+  [#15942](https://github.com/rust-lang/cargo/pull/15942)
+- cargo-publish: soft-deprecate the `--token` option
+  [#16046](https://github.com/rust-lang/cargo/pull/16046)
+
+### Fixed
+
+### Nightly only
+
+- 🔥 `immediate-abort`: Add `panic=immediate-abort` support
+  [#16041](https://github.com/rust-lang/cargo/pull/16041)
+  [#16054](https://github.com/rust-lang/cargo/pull/16054)
+- `-Zbuild-dir-new-layout`: Reorganize build-dir layout
+  [#15947](https://github.com/rust-lang/cargo/pull/15947)
+- `-Zbuild-std`: test move away from panic_immediate_abort
+  [#16006](https://github.com/rust-lang/cargo/pull/16006)
+- `-Zcargo-lints`: Add lint for global use of `hint-mostly-unused`
+  [#15995](https://github.com/rust-lang/cargo/pull/15995)
+- `-Zpublic-dependency`: `cargo add` now considers public dependencies when choosing a version
+  [#15966](https://github.com/rust-lang/cargo/pull/15966)
+- `-Zpublic-dependency`: Switch from `--depth public` to `--edges public` for `cargo tree` to display public dependencies
+  [#16081](https://github.com/rust-lang/cargo/pull/16081)
+- `-Zpublic-dependency`: Improve public-in-private manifest errors
+  [#16002](https://github.com/rust-lang/cargo/pull/16002)
+  [#16075](https://github.com/rust-lang/cargo/pull/16075)
+- `-Zscript`: Improve frontmatter parsing error quality
+  [#15972](https://github.com/rust-lang/cargo/pull/15972)
+  [#15939](https://github.com/rust-lang/cargo/pull/15939)
+  [#15952](https://github.com/rust-lang/cargo/pull/15952)
+- `-Zscript`: Only allow horizontal whitespace after fences
+  [#15975](https://github.com/rust-lang/cargo/pull/15975)
+- `-Zscript`: Override arg0 for cargo scripts
+  [#16027](https://github.com/rust-lang/cargo/pull/16027)
+- `-Zscript`: Tweak cargo script build-dir / target-dir
+  [#16086](https://github.com/rust-lang/cargo/pull/16086)
+- `-Zscript`: Remove name sanitiztion outside what is strictly required
+  [#16120](https://github.com/rust-lang/cargo/pull/16120)
+- `-Zscript`: Store cargo script lockfiles in build-dir
+  [#16087](https://github.com/rust-lang/cargo/pull/16087)
+- `-Zscript`: Define cargo script's target-dir using build-dir templating
+  [#16073](https://github.com/rust-lang/cargo/pull/16073)
+- `-Zscript`: Prevent non-script fields in Cargo scripts
+  [#16026](https://github.com/rust-lang/cargo/pull/16026)
+- `-Zscript`: Default bin.name to package.name
+  [#16064](https://github.com/rust-lang/cargo/pull/16064)
+- `multiple-build-scripts`: Access each build script's `OUT_DIR` via `<script-name>_OUT_DIR`
+  [#15891](https://github.com/rust-lang/cargo/pull/15891)
+- `native-completions`: Added completion for `--features` flag
+  [#15309](https://github.com/rust-lang/cargo/pull/15309)
+- `native-completions`: Show local crates/features over other members
+  [#15956](https://github.com/rust-lang/cargo/pull/15956)
+- `native-completions`: Allow completions for third-party subcommand names
+  [#15961](https://github.com/rust-lang/cargo/pull/15961)
+
+### Documentation
+
+- 🎉 Add a new "Optimizing Build Performance" chapter
+  [#15924](https://github.com/rust-lang/cargo/pull/15924)
+  [#15970](https://github.com/rust-lang/cargo/pull/15970)
+  [#15991](https://github.com/rust-lang/cargo/pull/15991)
+  [#16078](https://github.com/rust-lang/cargo/pull/16078)
+  [#16085](https://github.com/rust-lang/cargo/pull/16085)
+  [#16107](https://github.com/rust-lang/cargo/pull/16107)
+  [#16108](https://github.com/rust-lang/cargo/pull/16108)
+- Clarify git sources vs git registries in source replacement documentation
+  [#15974](https://github.com/rust-lang/cargo/pull/15974)
+- Clarify what we mean by omitting features in registry index documentation
+  [#15957](https://github.com/rust-lang/cargo/pull/15957)
+- Clarify the role of the lockfile in dependency resolution
+  [#15958](https://github.com/rust-lang/cargo/pull/15958)
+- Clarify multiple version requirement behavior
+  [#15979](https://github.com/rust-lang/cargo/pull/15979)
+- Clarify that `target.<cfg>.linker` is supported
+  [#16112](https://github.com/rust-lang/cargo/pull/16112)
+- Explain Cargo config deserialization internals
+  [#16105](https://github.com/rust-lang/cargo/pull/16105)
+  [#16094](https://github.com/rust-lang/cargo/pull/16094)
+- contrib: Move docs building process to contributor guide
+  [#15854](https://github.com/rust-lang/cargo/pull/15854)
+- SemVer: Recommend `package.rust-version` in the Rust version section
+  [#15806](https://github.com/rust-lang/cargo/pull/15806)
+
+### Internal
+
+- Make GlobalContext Sync
+  [#15967](https://github.com/rust-lang/cargo/pull/15967)
+- Centralize Cargo console output styling
+  [#16124](https://github.com/rust-lang/cargo/pull/16124)
+  [#16135](https://github.com/rust-lang/cargo/pull/16135)
+- Refactor `Layout` into `BuildDirLayout` and `ArtifactDirLayout`
+  [#16092](https://github.com/rust-lang/cargo/pull/16092)
+- cargo-test-support: Add track_caller to know the actual failure
+  [#16069](https://github.com/rust-lang/cargo/pull/16069)
+- cargo-test-support: Added better filesystem layout testing harness
+  [#15874](https://github.com/rust-lang/cargo/pull/15874)
+- cargo-util-schemas: Move lockfile schemas in
+  [#15980](https://github.com/rust-lang/cargo/pull/15980)
+  [#15990](https://github.com/rust-lang/cargo/pull/15990)
+  [#16039](https://github.com/rust-lang/cargo/pull/16039)
+- ci: Skip check-version-bump ci job in forks
+  [#15959](https://github.com/rust-lang/cargo/pull/15959)
+- config: various internal cleanup and refactor for `ConfigValue`
+  [#16067](https://github.com/rust-lang/cargo/pull/16067)
+  [#16084](https://github.com/rust-lang/cargo/pull/16084)
+  [#16091](https://github.com/rust-lang/cargo/pull/16091)
+  [#16100](https://github.com/rust-lang/cargo/pull/16100)
+  [#16109](https://github.com/rust-lang/cargo/pull/16109)
+- perf: JSON message with less allocations
+  [#16130](https://github.com/rust-lang/cargo/pull/16130)
+- test: null-terminated path for reserved windows name detection
+  [#16052](https://github.com/rust-lang/cargo/pull/16052)
+- test: Don't look for a specific ANSI color
+  [#16118](https://github.com/rust-lang/cargo/pull/16118)
+- test: Fix test that assumes `CARGO_CFG_TARGET_FAMILY` is a single value
+  [#16079](https://github.com/rust-lang/cargo/pull/16079)
+- Update dependencies.
+  [#15988](https://github.com/rust-lang/cargo/pull/15988)
+  [#15984](https://github.com/rust-lang/cargo/pull/15984)
+  [#15989](https://github.com/rust-lang/cargo/pull/15989)
+  [#15992](https://github.com/rust-lang/cargo/pull/15992)
+  [#15993](https://github.com/rust-lang/cargo/pull/15993)
+  [#16009](https://github.com/rust-lang/cargo/pull/16009)
+  [#16031](https://github.com/rust-lang/cargo/pull/16031)
+  [#16034](https://github.com/rust-lang/cargo/pull/16034)
+
+## Cargo 1.91 (2025-10-30)
+[840b83a1...rust-1.91.0](https://github.com/rust-lang/cargo/compare/840b83a1...rust-1.91.0)
+
+### Added
+
+- 🎉 Stabilize `build.build-dir`.
+  This config sets the directory where intermediate build artifacts are stored.
+  These artifacts are produced by Cargo and rustc during the build process.
+  End users usually won't need to interact with them, and the layout inside
+  `build-dir` is an implementation detail that may change without notice.
+  ([config doc](https://doc.rust-lang.org/nightly/cargo/reference/config.html#buildbuild-dir))
+  ([build cache doc](https://doc.rust-lang.org/nightly/cargo/reference/build-cache.html))
+  [#15833](https://github.com/rust-lang/cargo/pull/15833)
+  [#15840](https://github.com/rust-lang/cargo/pull/15840)
+- The `--target` flag and the `build.target` configuration can now take literal
+  `"host-tuple"` string, which will internally be substituted by the host
+  machine's target triple.
+  [#15838](https://github.com/rust-lang/cargo/pull/15838)
+  [#16003](https://github.com/rust-lang/cargo/pull/16003)
+  [#16032](https://github.com/rust-lang/cargo/pull/16032)
+
+### Changed
+
+- ❗️ `cargo publish` no longer keeps `.crate` tarballs as final build artifacts
+  when `build.build-dir` is set. These tarballs were previously included due to
+  an oversight and are now treated as intermediate artifacts.
+  To get `.crate` tarballs as final artifacts, use `cargo package`.
+  In a future version, this change will apply regardless of `build.build-dir`.
+  [#15910](https://github.com/rust-lang/cargo/pull/15910)
+- Adjust Cargo messages to match rustc diagnostic style
+  [#15928](https://github.com/rust-lang/cargo/pull/15928)
+- More helpful error for invalid `cargo-features = []`
+  [#15781](https://github.com/rust-lang/cargo/pull/15781)
+- Don't stop at first error when emitting lints and warnings
+  [#15889](https://github.com/rust-lang/cargo/pull/15889)
+- Show the bad manifest path in the error message
+  [#15896](https://github.com/rust-lang/cargo/pull/15896)
+- Suggest workspace hints for invalid boolean dependencies
+  [#15507](https://github.com/rust-lang/cargo/pull/15507)
+- cargo-package: Always reuse the workspace's target-dir during the package
+  verification. Previously Cargo created a new standalone target directory
+  within the unpacked source.
+  [#15783](https://github.com/rust-lang/cargo/pull/15783)
+- cargo-publish: Add more context to publish-failed error message
+  [#15879](https://github.com/rust-lang/cargo/pull/15879)
+
+### Fixed
+
+### Nightly only
+
+- 🔥 `-Zsection-timings` extend the output of `cargo build --timings`. It tells
+  rustc to produce timings of individual compilation sections, which will be
+  then displayed in the timings HTML/JSON output.
+  ([docs](https://doc.rust-lang.org/nightly/cargo/reference/unstable.html#section-timings))
+  [#15780](https://github.com/rust-lang/cargo/pull/15780)
+  [#15923](https://github.com/rust-lang/cargo/pull/15923)
+- 🔥 `-Zbuild-dir-new-layout` enables the new build-dir filesystem layout, which
+  unblocks work towards caching and locking improvements.
+  ([docs](https://doc.rust-lang.org/nightly/cargo/reference/unstable.html#build-dir-new-layout))
+  ([project goal](https://rust-lang.github.io/rust-project-goals/2025h2/cargo-build-dir-layout.html))
+  [#15848](https://github.com/rust-lang/cargo/pull/15848)
+- 🔥 `-Zbuild-analysis` records and persists detailed build metrics (timings, rebuild reasons, etc.)
+  across runs, with new commands to query past builds.
+  ([docs](https://doc.rust-lang.org/nightly/cargo/reference/unstable.html#build-analysis))
+  ([project goal](https://rust-lang.github.io/rust-project-goals/2025h2/cargo-build-analysis.html))
+  [#15845](https://github.com/rust-lang/cargo/pull/15845)
+- `multiple-build-scripts`:  Accessing each build script's `OUT_DIR` and in the
+  correct order
+  [#15776](https://github.com/rust-lang/cargo/pull/15776)
+- `-Zcargo-lints`: Linting system infra improvement
+  [#15865](https://github.com/rust-lang/cargo/pull/15865)
+- `-Zscript`: Cover some frontmatter corner cases
+  [#15886](https://github.com/rust-lang/cargo/pull/15886)
+- `-Zscript`: Match test updates in rustc
+  [#15878](https://github.com/rust-lang/cargo/pull/15878)
+- `-Zscript`: Switch frontmatter tests to end-to-end
+  [#15899](https://github.com/rust-lang/cargo/pull/15899)
+- `-Zscript`: Report script manifest errors for the right line number
+  [#15927](https://github.com/rust-lang/cargo/pull/15927)
+- `-Zscript`: Pull out as a dedicated mod
+  [#15914](https://github.com/rust-lang/cargo/pull/15914)
+
+### Documentation
+
+- Clarify that `cargo doc --no-deps` is cumulative and won’t delete prev
+  [#15800](https://github.com/rust-lang/cargo/pull/15800)
+- Switch from `--nocapture` to `--no-capture` in docs and help text.
+  [#15930](https://github.com/rust-lang/cargo/pull/15930)
+- Mention how Cargo fetch git submodules
+  [#15853](https://github.com/rust-lang/cargo/pull/15853)
+  [#15860](https://github.com/rust-lang/cargo/pull/15860)
+- Link out to the Plumbing commands effort
+  [#15821](https://github.com/rust-lang/cargo/pull/15821)
+- Switch to using native mdbook fragment redirects
+  [#15861](https://github.com/rust-lang/cargo/pull/15861)
+- Reorder `lto` options in profiles
+  [#15841](https://github.com/rust-lang/cargo/pull/15841)
+  [#15855](https://github.com/rust-lang/cargo/pull/15855)
+
+### Internal
+
+- Replace ad-hoc flock implementation with std flock
+  [#15935](https://github.com/rust-lang/cargo/pull/15935)
+  [#15941](https://github.com/rust-lang/cargo/pull/15941)
+- Prepare for annotate-snippets `Report`s being generated in more places
+  [#15920](https://github.com/rust-lang/cargo/pull/15920)
+  [#15926](https://github.com/rust-lang/cargo/pull/15926)
+- test: avoid hardcoded target spec json
+  [#15880](https://github.com/rust-lang/cargo/pull/15880)
+- test: Ensure consistent behavior regardless of rustup use
+  [#15949](https://github.com/rust-lang/cargo/pull/15949)
+- test: Switch more expected results to snapshots for credential process
+  [#15929](https://github.com/rust-lang/cargo/pull/15929)
+- ci: Add Arm64 Windows CI jobs
+  [#15790](https://github.com/rust-lang/cargo/pull/15790)
+- ci: remove x86_64-apple-darwin from CI and tests
+  [#15831](https://github.com/rust-lang/cargo/pull/15831)
+- Update dependencies.
+  [#15795](https://github.com/rust-lang/cargo/pull/15795)
+  [#15804](https://github.com/rust-lang/cargo/pull/15804)
+  [#15815](https://github.com/rust-lang/cargo/pull/15815)
+  [#15816](https://github.com/rust-lang/cargo/pull/15816)
+  [#15819](https://github.com/rust-lang/cargo/pull/15819)
+  [#15825](https://github.com/rust-lang/cargo/pull/15825)
+  [#15832](https://github.com/rust-lang/cargo/pull/15832)
+  [#15851](https://github.com/rust-lang/cargo/pull/15851)
+  [#15898](https://github.com/rust-lang/cargo/pull/15898)
+  [#15904](https://github.com/rust-lang/cargo/pull/15904)
+  [#15909](https://github.com/rust-lang/cargo/pull/15909)
+  [#15918](https://github.com/rust-lang/cargo/pull/15918)
+  [#15950](https://github.com/rust-lang/cargo/pull/15950)
+
+## Cargo 1.90 (2025-09-18)
+[c24e1064...rust-1.90.0](https://github.com/rust-lang/cargo/compare/c24e1064...rust-1.90.0)
+
+### Added
+
+- 🎉 Stabilize multi-package publishing.
+  This allows cargo to publish multiple crates in a workspace, even if they
+  have inter-dependencies. For example, `cargo publish --workspace` or
+  `cargo publish -p foo -p bar`.
+  Note that `cargo publish` is still non-atomic at this time. If there is a
+  server side error during the publish, the workspace will be left in a
+  partially published state.
+  [#15636](https://github.com/rust-lang/cargo/pull/15636)
+  [#15711](https://github.com/rust-lang/cargo/pull/15711)
+- Added `http.proxy-cainfo` config for proxy TLS certificates.
+  [docs](https://doc.rust-lang.org/nightly/cargo/reference/config.html#httpproxy-cainfo)
+  [#15374](https://github.com/rust-lang/cargo/pull/15374)
+
+### Changed
+
+- cargo-package: Use `gix` to speed up Git status check by 10-20%.
+  [#15534](https://github.com/rust-lang/cargo/pull/15534)
+- Make timings graphs scalable to user's window.
+  [#15766](https://github.com/rust-lang/cargo/pull/15766)
+- Report valid file name when we can't find a build target for `name = "foo.rs"` 
+  [#15707](https://github.com/rust-lang/cargo/pull/15707)
+
+### Fixed
+
+- cargo-credential-libsecret: give FFI correctly-sized object 
+  [#15767](https://github.com/rust-lang/cargo/pull/15767)
+- cargo-publish: includes manifest paths in errors when verifying
+  [#15705](https://github.com/rust-lang/cargo/pull/15705)
+- cargo-tree: Fixed `no-proc-macro` being overridden by subsequent edges.
+  [#15764](https://github.com/rust-lang/cargo/pull/15764)
+
+### Nightly only
+
+- 🔥 `multiple-build-scripts`: Allows you to have multiple build scripts in your package.
+  [docs](https://doc.rust-lang.org/nightly/cargo/reference/unstable.html#multiple-build-scripts)
+  [#15630](https://github.com/rust-lang/cargo/pull/15630)
+  [#15704](https://github.com/rust-lang/cargo/pull/15704)
+- 🔥 `-Zprofile-hint-mostly-unused`: Add `[hints]` table in `Cargo.toml`,
+  and a `hints.mostly-unused` hint.
+  [docs](https://doc.rust-lang.org/nightly/cargo/reference/unstable.html#profile-hint-mostly-unused-option)
+  [#15673](https://github.com/rust-lang/cargo/pull/15673)
+- `-Zfeature-unification`: implemented per-package feature unification
+  [#15684](https://github.com/rust-lang/cargo/pull/15684)
+- `-Zsbom`: Clarify package ID specifications in SBOMs are fully qualified 
+  [#15731](https://github.com/rust-lang/cargo/pull/15731)
+
+### Documentation
+
+### Internal
+
+- build-rs: auto-publish on toolchain release
+  [#15708](https://github.com/rust-lang/cargo/pull/15708)
+- cargo-util-schemas: Expose `IndexPackage`, the description of a package within a Registry Index 
+  [#15770](https://github.com/rust-lang/cargo/pull/15770)
+- ci: update cargo-semver-checks to v0.42.0 
+  [#15730](https://github.com/rust-lang/cargo/pull/15730)
+- perf: Speed up TOML parsing by upgrading toml 
+  [#15736](https://github.com/rust-lang/cargo/pull/15736)
+  [#15779](https://github.com/rust-lang/cargo/pull/15779)
+- test: Rework `cargo-test-support` & `testsuite` to use `CARGO_BIN_EXE_*` for Cargo 
+  [#15692](https://github.com/rust-lang/cargo/pull/15692)
+- test: Use a different lint to simulate diagnostic duplicates
+  [#15713](https://github.com/rust-lang/cargo/pull/15713)
+  [#15717](https://github.com/rust-lang/cargo/pull/15717)
+- test: Switch config tests to use snapshots 
+  [#15729](https://github.com/rust-lang/cargo/pull/15729)
+- test: Remove unnecessary target-c-int-width from target specs 
+  [#15759](https://github.com/rust-lang/cargo/pull/15759)
+- test: Mark cachelock tests that rely on interprocess blocking behaviour as unsupported on AIX. 
+  [#15734](https://github.com/rust-lang/cargo/pull/15734)
+- Expose artifact dependency getters in cargo-as-a-library 
+  [#15753](https://github.com/rust-lang/cargo/pull/15753)
+- Allow using Cargo-as-a-library with gix's reqwest backend 
+  [#15653](https://github.com/rust-lang/cargo/pull/15653)
+- Update to Rust 2024
+  [#15732](https://github.com/rust-lang/cargo/pull/15732)
+- Update dependencies.
+  [#15706](https://github.com/rust-lang/cargo/pull/15706)
+  [#15709](https://github.com/rust-lang/cargo/pull/15709)
+  [#15722](https://github.com/rust-lang/cargo/pull/15722)
+
 ## Cargo 1.89 (2025-08-07)
-[873a0649...HEAD](https://github.com/rust-lang/cargo/compare/873a0649...HEAD)
+[873a0649...rust-1.89.0](https://github.com/rust-lang/cargo/compare/873a0649...rust-1.89.0)
 
 ### Added
 
 - Add `*` and `?` pattern support for SSH known hosts matching.
   [#15508](https://github.com/rust-lang/cargo/pull/15508)
+- Stabilize doctest-xcompile. Doctests will now automatically be tested when cross-compiling to a target that is different from the host, just like other tests.
+  [#15462](https://github.com/rust-lang/cargo/pull/15462)
 
 ### Changed
 
@@ -28,6 +454,28 @@
 
 ### Fixed
 
+- Fixed potential deadlock in `CacheState::lock`
+  [#15698](https://github.com/rust-lang/cargo/pull/15698)
+  [#15699](https://github.com/rust-lang/cargo/pull/15699)
+- Fixed the `--manifest-path` arg being ignored in `cargo fix`
+  [#15633](https://github.com/rust-lang/cargo/pull/15633)
+- When publishing, don't tell people to ctrl-c without knowing consequences.
+  [#15632](https://github.com/rust-lang/cargo/pull/15632)
+- Added missing `--offline` in shell completions.
+  [#15623](https://github.com/rust-lang/cargo/pull/15623)
+- cargo-credential-libsecret: load libsecret only once
+  [#15295](https://github.com/rust-lang/cargo/pull/15295)
+- When failing to find the mtime of a file for rebuild detection, report an explicit reason rather than "stale; unknown reason".
+  [#15617](https://github.com/rust-lang/cargo/pull/15617)
+- Fixed cargo add overwriting symlinked Cargo.toml files
+  [#15281](https://github.com/rust-lang/cargo/pull/15281)
+- Vendor files with .rej/.orig suffix
+  [#15569](https://github.com/rust-lang/cargo/pull/15569)
+- Vendor using direct extraction for registry sources. This should ensure that vendored files now always match the originals.
+  [#15514](https://github.com/rust-lang/cargo/pull/15514)
+- In the network retry message, use singular "try" for the last retry.
+  [#15328](https://github.com/rust-lang/cargo/pull/15328)
+
 ### Nightly only
 
 - 🔥 `-Zno-embed-metadata`: This tells Cargo to pass the `-Zembed-metadata=no`
@@ -36,10 +484,43 @@
   `.rmeta` files.
   ([docs](https://doc.rust-lang.org/nightly/cargo/reference/unstable.html#no-embed-metadata))
   [#15378](https://github.com/rust-lang/cargo/pull/15378)
+- 🔥 Plumb rustc `-Zhint-mostly-unused` flag through as a profile option
+  ([docs](https://doc.rust-lang.org/nightly/cargo/reference/unstable.html#profile-hint-mostly-unused-option))
+  [#15643](https://github.com/rust-lang/cargo/pull/15643)
+- Added the "future" edition
+  [#15595](https://github.com/rust-lang/cargo/pull/15595)
+- Added `-Zfix-edition`
+  [#15596](https://github.com/rust-lang/cargo/pull/15596)
+- Added perma unstable `--compile-time-deps` option for `cargo build`
+  [#15674](https://github.com/rust-lang/cargo/pull/15674)
 - `-Zscript`: Make cargo script ignore workspaces.
   [#15496](https://github.com/rust-lang/cargo/pull/15496)
 - `-Zpackage-workspace`: keep dev-dependencies if they have a version.
   [#15470](https://github.com/rust-lang/cargo/pull/15470)
+- Added custom completer for `cargo remove <TAB>`
+  [#15662](https://github.com/rust-lang/cargo/pull/15662)
+- Test improvements in prep for `-Zpackage-workspace` stabilization
+  [#15628](https://github.com/rust-lang/cargo/pull/15628)
+- Allow packaging of self-cycles with `-Zpackage-workspace`
+  [#15626](https://github.com/rust-lang/cargo/pull/15626)
+- With trim-paths, remap all paths to `build.build-dir`
+  [#15614](https://github.com/rust-lang/cargo/pull/15614)
+- Enable more trim-paths tests for windows-msvc
+  [#15621](https://github.com/rust-lang/cargo/pull/15621)
+- Fix doc rebuild detection by passing `toolchain-shared-resources` to get doc styled for rustdoc-depinfo tracking
+  [#15605](https://github.com/rust-lang/cargo/pull/15605)
+- Resolve multiple bugs in frontmatter parser for `-Zscript`
+  [#15573](https://github.com/rust-lang/cargo/pull/15573)
+- Remove workaround for rustc frontmatter support for `-Zscript`
+  [#15570](https://github.com/rust-lang/cargo/pull/15570)
+- Allow configuring arbitrary codegen backends
+  [#15562](https://github.com/rust-lang/cargo/pull/15562)
+- skip `publish=false` pkg when publishing entire workspace for `-Zpackage-workspace`.
+  [#15525](https://github.com/rust-lang/cargo/pull/15525)
+- Update instructions on using native-completions
+  [#15480](https://github.com/rust-lang/cargo/pull/15480)
+- Skip registry check if its not needed with `-Zpackage-workspace`.
+  [#15629](https://github.com/rust-lang/cargo/pull/15629)
 
 ### Documentation
 
@@ -49,6 +530,14 @@
   [#15478](https://github.com/rust-lang/cargo/pull/15478)
 - home: update version notice for deprecation removal 
   [#15511](https://github.com/rust-lang/cargo/pull/15511)
+- docs(contrib): change clap URL to docs.rs/clap
+  [#15682](https://github.com/rust-lang/cargo/pull/15682)
+- Update links in contrib docs
+  [#15659](https://github.com/rust-lang/cargo/pull/15659)
+- docs: clarify `--all-features` not available for all commands
+  [#15572](https://github.com/rust-lang/cargo/pull/15572)
+- docs(README): fix the link to the changelog in the Cargo book
+  [#15597](https://github.com/rust-lang/cargo/pull/15597)
 
 ### Internal
 
@@ -64,6 +553,37 @@
   [#15498](https://github.com/rust-lang/cargo/pull/15498)
 - Update dependencies.
   [#15456](https://github.com/rust-lang/cargo/pull/15456)
+- refactor: replace InternedString with Cow in IndexPackage
+  [#15559](https://github.com/rust-lang/cargo/pull/15559)
+- Use `Not::not` rather than a custom `is_false` function
+  [#15645](https://github.com/rust-lang/cargo/pull/15645)
+- fix: Make UI tests handle hyperlinks consistently
+  [#15640](https://github.com/rust-lang/cargo/pull/15640)
+- Update dependencies
+  [#15635](https://github.com/rust-lang/cargo/pull/15635)
+  [#15557](https://github.com/rust-lang/cargo/pull/15557)
+- refactor: clean up `clippy::perf` lint warnings
+  [#15631](https://github.com/rust-lang/cargo/pull/15631)
+- chore(deps): update alpine docker tag to v3.22
+  [#15616](https://github.com/rust-lang/cargo/pull/15616)
+- chore: remove HTML comments in PR template and inline guide
+  [#15613](https://github.com/rust-lang/cargo/pull/15613)
+- Added .git-blame-ignore-revs
+  [#15612](https://github.com/rust-lang/cargo/pull/15612)
+- refactor: cleanup for `CompileMode`
+  [#15608](https://github.com/rust-lang/cargo/pull/15608)
+- refactor: separate "global" mode from CompileMode
+  [#15601](https://github.com/rust-lang/cargo/pull/15601)
+- chore: Upgrade schemars
+  [#15602](https://github.com/rust-lang/cargo/pull/15602)
+- Update gix & socket2
+  [#15600](https://github.com/rust-lang/cargo/pull/15600)
+- chore(toml): disable `toml`'s default features, unless necessary, to reduce cargo-util-schemas build time
+  [#15598](https://github.com/rust-lang/cargo/pull/15598)
+- chore(gh): Add new-lint issue template
+  [#15575](https://github.com/rust-lang/cargo/pull/15575)
+- Fix comment for cargo/core/compiler/fingerprint/mod.rs
+  [#15565](https://github.com/rust-lang/cargo/pull/15565)
 
 ## Cargo 1.88 (2025-06-26)
 [a6c604d1...rust-1.88.0](https://github.com/rust-lang/cargo/compare/a6c604d1...rust-1.88.0)
@@ -117,6 +637,9 @@
   as git status check is mostly informational.
   [#15416](https://github.com/rust-lang/cargo/pull/15416)
   [#15419](https://github.com/rust-lang/cargo/pull/15419)
+- Fixed `cargo rustc --bin` panicking on unknown bin names
+  [#15515](https://github.com/rust-lang/cargo/pull/15515)
+  [#15497](https://github.com/rust-lang/cargo/pull/15497)
 
 ### Nightly only
 
@@ -206,7 +729,6 @@
   [#15193](https://github.com/rust-lang/cargo/pull/15193)
 - Include the package name also in the target hint message.
   [#15199](https://github.com/rust-lang/cargo/pull/15199)
-  [#15497](https://github.com/rust-lang/cargo/pull/15497)
 - cargo-add: collapse large feature lists
   [#15200](https://github.com/rust-lang/cargo/pull/15200)
 - cargo-vendor: Add context which workspace failed to resolve
@@ -2684,7 +3206,7 @@
   Some notable changes:
   - Renamed `credential-process` to `credential-provider` in Cargo configurations.
   - New JSON protocol for communicating with external credential providers via stdin/stdout.
-  - The GNOME Secert provider now dynamically loads `libsecert`.
+  - The GNOME Secret provider now dynamically loads `libsecert`.
   - The 1password provider is no longer built-in.
   - Changed the unstable key for asymmetric tokens from `registry-auth` to `credential-process`.
 - ❗️ Removed `--keep-going` flag support from `cargo test` and `cargo bench`.

@@ -2,14 +2,15 @@
 
 use std::fs;
 
-use cargo_test_support::prelude::*;
+use crate::prelude::*;
+use crate::utils::cargo_exe;
 use cargo_test_support::registry::Package;
-use cargo_test_support::{
-    basic_bin_manifest, basic_lib_manifest, basic_manifest, cargo_exe, project, str,
-};
+use cargo_test_support::{basic_bin_manifest, basic_lib_manifest, basic_manifest, project, str};
 use cargo_test_support::{cross_compile, paths};
 use cargo_test_support::{rustc_host, rustc_host_env, sleep_ms};
 use cargo_util::paths::dylib_path_envvar;
+
+use crate::utils::cross_compile::can_run_on_host as cross_compile_can_run_on_host;
 
 #[cargo_test]
 fn cargo_test_simple() {
@@ -2000,7 +2001,7 @@ fn test_no_harness() {
         .file("foo.rs", "fn main() {}")
         .build();
 
-    p.cargo("test -- --nocapture")
+    p.cargo("test -- --no-capture")
         .with_stderr_data(str![[r#"
 [COMPILING] foo v0.0.1 ([ROOT]/foo)
 [FINISHED] `test` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
@@ -3900,7 +3901,7 @@ fn cargo_test_env() {
             .unwrap()
             .replace(rustc_host, "[HOST_TARGET]")
     );
-    p.cargo("test --lib -- --nocapture")
+    p.cargo("test --lib -- --no-capture")
         .with_stderr_contains(cargo)
         .with_stdout_data(str![[r#"
 ...
@@ -3910,7 +3911,7 @@ test env_test ... ok
         .run();
 
     // Check that `cargo test` propagates the environment's $CARGO
-    let cargo_exe = cargo_test_support::cargo_exe();
+    let cargo_exe = cargo_exe();
     let other_cargo_path = p.root().join(cargo_exe.file_name().unwrap());
     std::fs::hard_link(&cargo_exe, &other_cargo_path).unwrap();
     let stderr_other_cargo = format!(
@@ -3922,7 +3923,7 @@ test env_test ... ok
             .replace(p.root().parent().unwrap().to_str().unwrap(), "[ROOT]")
     );
     p.process(other_cargo_path)
-        .args(&["test", "--lib", "--", "--nocapture"])
+        .args(&["test", "--lib", "--", "--no-capture"])
         .with_stderr_contains(stderr_other_cargo)
         .with_stdout_data(str![[r#"
 ...
@@ -4455,6 +4456,47 @@ fn json_artifact_includes_executable_for_library_tests() {
 }
 
 #[cargo_test]
+fn json_diagnostic_includes_explanation() {
+    let p = project()
+        .file(
+            "src/main.rs",
+            "fn main() { const OH_NO: &'static mut usize = &mut 1; }",
+        )
+        .build();
+
+    p.cargo("check --message-format=json")
+        .with_stdout_data(
+            str![[r#"
+[
+  {
+    "manifest_path": "[ROOT]/foo/Cargo.toml",
+    "message": {
+      "$message_type": "diagnostic",
+      "children": "{...}",
+      "code": {
+        "code": "E0764",
+        "explanation": "{...}"
+      },
+      "level": "error",
+      "message": "{...}",
+      "rendered": "{...}",
+      "spans": "{...}"
+    },
+    "package_id": "{...}",
+    "reason": "compiler-message",
+    "target": "{...}"
+  },
+  "{...}"
+]
+"#]]
+            .is_json()
+            .against_jsonlines(),
+        )
+        .with_status(101)
+        .run();
+}
+
+#[cargo_test]
 fn json_artifact_includes_executable_for_integration_tests() {
     let p = project()
         .file(
@@ -4741,10 +4783,7 @@ fn test_dep_with_dev() {
         .run();
 }
 
-#[cargo_test(
-    nightly,
-    reason = "waiting for 1.88 to be stable for doctest xcompile flags"
-)]
+#[cargo_test]
 fn cargo_test_doctest_xcompile_ignores() {
     // Check ignore-TARGET syntax.
     let p = project()
@@ -4781,12 +4820,9 @@ test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; fini
         .run();
 }
 
-#[cargo_test(
-    nightly,
-    reason = "waiting for 1.88 to be stable for doctest xcompile flags"
-)]
+#[cargo_test]
 fn cargo_test_doctest_xcompile_runner() {
-    if !cross_compile::can_run_on_host() {
+    if !cross_compile_can_run_on_host() {
         return;
     }
 
@@ -4867,12 +4903,9 @@ this is a runner
         .run();
 }
 
-#[cargo_test(
-    nightly,
-    reason = "waiting for 1.88 to be stable for doctest xcompile flags"
-)]
+#[cargo_test]
 fn cargo_test_doctest_xcompile_no_runner() {
-    if !cross_compile::can_run_on_host() {
+    if !cross_compile_can_run_on_host() {
         return;
     }
 
@@ -5406,20 +5439,20 @@ this is a normal error
 
 Caused by:
   process didn't exit successfully: `[ROOT]/foo/target/debug/deps/t2-[HASH][EXE]` ([EXIT_STATUS]: 4)
-[NOTE] test exited abnormally; to see the full output pass --nocapture to the harness.
+[NOTE] test exited abnormally; to see the full output pass --no-capture to the harness.
 
 "#]])
         .with_status(4)
         .run();
 
-    p.cargo("test --test t2 -- --nocapture")
+    p.cargo("test --test t2 -- --no-capture")
         .with_stderr_data(str![[r#"
 [FINISHED] `test` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
 [RUNNING] tests/t2.rs (target/debug/deps/t2-[HASH][EXE])
 [ERROR] test failed, to rerun pass `--test t2`
 
 Caused by:
-  process didn't exit successfully: `[ROOT]/foo/target/debug/deps/t2-[HASH][EXE] --nocapture` ([EXIT_STATUS]: 4)
+  process didn't exit successfully: `[ROOT]/foo/target/debug/deps/t2-[HASH][EXE] --no-capture` ([EXIT_STATUS]: 4)
 
 "#]])
         .with_status(4)
@@ -5436,7 +5469,7 @@ Caused by:
 
 Caused by:
   process didn't exit successfully: `[ROOT]/foo/target/debug/deps/t2-[HASH][EXE]` ([EXIT_STATUS]: 4)
-[NOTE] test exited abnormally; to see the full output pass --nocapture to the harness.
+[NOTE] test exited abnormally; to see the full output pass --no-capture to the harness.
 [ERROR] 2 targets failed:
     `--test t1`
     `--test t2`
@@ -5445,15 +5478,15 @@ Caused by:
         .with_status(101)
         .run();
 
-    p.cargo("test --no-fail-fast -- --nocapture")
+    p.cargo("test --no-fail-fast -- --no-capture")
         .with_stderr_does_not_contain(
-            "test exited abnormally; to see the full output pass --nocapture to the harness.",
+            "test exited abnormally; to see the full output pass --no-capture to the harness.",
         )
         .with_stderr_data(str![[r#"
 [..]thread [..]panicked [..] tests/t1.rs[..]
 [NOTE] run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 Caused by:
-  process didn't exit successfully: `[ROOT]/foo/target/debug/deps/t2-[HASH][EXE] --nocapture` ([EXIT_STATUS]: 4)
+  process didn't exit successfully: `[ROOT]/foo/target/debug/deps/t2-[HASH][EXE] --no-capture` ([EXIT_STATUS]: 4)
 ...
 "#]].unordered())
         .with_status(101)
@@ -5521,6 +5554,6 @@ fn cargo_test_set_out_dir_env_var() {
         .build();
 
     p.cargo("test").run();
-    p.cargo("test --package foo --test case -- tests::test_add --exact --nocapture")
+    p.cargo("test --package foo --test case -- tests::test_add --exact --no-capture")
         .run();
 }

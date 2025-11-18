@@ -76,7 +76,7 @@ system:
   detail.
 * `TERM` --- If this is set to `dumb`, it disables the progress bar.
 * `BROWSER` --- The web browser to execute to open documentation with [`cargo
-  doc`]'s' `--open` flag, see [`doc.browser`] for more details.
+  doc`]'s `--open` flag, see [`doc.browser`] for more details.
 * `RUSTFMT` --- Instead of running `rustfmt`,
   [`cargo fmt`](https://github.com/rust-lang/rustfmt) will execute this specified
   `rustfmt` instance instead.
@@ -95,6 +95,7 @@ In summary, the supported environment variables are:
 * `CARGO_BUILD_RUSTDOC` --- The `rustdoc` executable, see [`build.rustdoc`].
 * `CARGO_BUILD_TARGET` --- The default target platform, see [`build.target`].
 * `CARGO_BUILD_TARGET_DIR` --- The default output directory, see [`build.target-dir`].
+* `CARGO_BUILD_BUILD_DIR` --- The default build directory, see [`build.build-dir`].
 * `CARGO_BUILD_RUSTFLAGS` --- Extra `rustc` flags, see [`build.rustflags`].
 * `CARGO_BUILD_RUSTDOCFLAGS` --- Extra `rustdoc` flags, see [`build.rustdocflags`].
 * `CARGO_BUILD_INCREMENTAL` --- Incremental compilation, see [`build.incremental`].
@@ -106,6 +107,7 @@ In summary, the supported environment variables are:
 * `CARGO_HTTP_PROXY` --- Enables HTTP proxy, see [`http.proxy`].
 * `CARGO_HTTP_TIMEOUT` --- The HTTP timeout, see [`http.timeout`].
 * `CARGO_HTTP_CAINFO` --- The TLS certificate Certificate Authority file, see [`http.cainfo`].
+* `CARGO_HTTP_PROXY_CAINFO` --- The proxy TLS certificate Certificate Authority file, see [`http.proxy-cainfo`].
 * `CARGO_HTTP_CHECK_REVOKE` --- Disables TLS certificate revocation checks, see [`http.check-revoke`].
 * `CARGO_HTTP_SSL_VERSION` --- The TLS version to use, see [`http.ssl-version`].
 * `CARGO_HTTP_LOW_SPEED_LIMIT` --- The HTTP low-speed limit, see [`http.low-speed-limit`].
@@ -159,6 +161,7 @@ In summary, the supported environment variables are:
 [`build.rustdoc`]: config.md#buildrustdoc
 [`build.target`]: config.md#buildtarget
 [`build.target-dir`]: config.md#buildtarget-dir
+[`build.build-dir`]: config.md#buildbuild-dir
 [`build.rustflags`]: config.md#buildrustflags
 [`build.rustdocflags`]: config.md#buildrustdocflags
 [`build.incremental`]: config.md#buildincremental
@@ -173,6 +176,7 @@ In summary, the supported environment variables are:
 [`http.proxy`]: config.md#httpproxy
 [`http.timeout`]: config.md#httptimeout
 [`http.cainfo`]: config.md#httpcainfo
+[`http.proxy-cainfo`]: config.md#httpproxy-cainfo
 [`http.check-revoke`]: config.md#httpcheck-revoke
 [`http.ssl-version`]: config.md#httpssl-version
 [`http.low-speed-limit`]: config.md#httplow-speed-limit
@@ -379,7 +383,7 @@ let out_dir = env::var("OUT_DIR").unwrap();
   [`release`] profile. Using this environment variable is not recommended.
   Using other environment variables like `OPT_LEVEL` provide a more correct
   view of the actual settings being used.
-* `DEP_<name>_<key>` --- For more information about this set of environment variables,
+* `DEP_<links>_<key>` --- For more information about this set of environment variables,
   see build script documentation about [`links`][links].
 * `RUSTC`, `RUSTDOC` --- the compiler and documentation generator that Cargo has
   resolved to use, passed to the build script so it might use it as well.

@@ -1,6 +1,6 @@
 //! Tests for `[features]` table.
 
-use cargo_test_support::prelude::*;
+use crate::prelude::*;
 use cargo_test_support::registry::{Dependency, Package};
 use cargo_test_support::str;
 use cargo_test_support::{basic_manifest, project};
@@ -99,7 +99,6 @@ fn empty_feature_name() {
   |
 9 |                 "" = []
   |                 ^^
-  |
 
 "#]])
         .run();
@@ -348,7 +347,6 @@ fn feature_activates_missing_dep_feature() {
   |
 9 |                 foo = ["bar/baz"]
   |                       ^^^^^^^^^^^
-  |
 [ERROR] failed to parse manifest at `[ROOT]/foo/Cargo.toml`
 
 "#]])
@@ -383,7 +381,6 @@ fn feature_activates_feature_inside_feature() {
   |
 9 |                 foo = ["bar/baz"]
   |                       ^^^^^^^^^^^
-  |
 [ERROR] failed to parse manifest at `[ROOT]/foo/Cargo.toml`
 
 "#]])
@@ -451,7 +448,7 @@ fn cli_activates_required_dependency() {
 [LOCKING] 1 package to latest compatible version
 [ERROR] package `foo v0.0.1 ([ROOT]/foo)` does not have feature `bar`
 
-[HELP] a depednency with that name exists but it is required dependency and only optional dependencies can be used as features.
+[HELP] a dependency with that name exists but it is required dependency and only optional dependencies can be used as features.
 
 "#]])
         .with_status(101)
@@ -1854,13 +1851,16 @@ fn warn_if_default_features() {
         .file("bar/src/lib.rs", "pub fn bar() {}")
         .build();
 
-    p.cargo("check").with_stderr_data(str![[r#"
-[WARNING] `default-features = [".."]` was found in [features]. Did you mean to use `default = [".."]`?
+    p.cargo("check")
+        .with_stderr_data(str![[r#"
+[WARNING] `[features]` defines a feature named `default-features`
+[NOTE] only a feature named `default` will be enabled by default
 [LOCKING] 1 package to latest compatible version
 [CHECKING] foo v0.0.1 ([ROOT]/foo)
 [FINISHED] `dev` profile [unoptimized + debuginfo] target(s) in [ELAPSED]s
 
-"#]]).run();
+"#]])
+        .run();
 }
 
 #[cargo_test]
@@ -2306,7 +2306,6 @@ fn invalid_feature_names_error() {
   |
 9 |                 "+foo" = []
   |                 ^^^^^^
-  |
 
 "#]])
         .run();
@@ -2333,7 +2332,6 @@ fn invalid_feature_names_error() {
   |
 9 |             "a&b" = []
   |             ^^^^^
-  |
 
 "#]])
         .run();
@@ -2366,7 +2364,6 @@ fn invalid_feature_name_slash_error() {
   |
 8 |                 "foo/bar" = []
   |                 ^^^^^^^^^
-  |
 
 "#]])
         .run();

@@ -43,27 +43,27 @@ use crate::core::dependency::{ArtifactTarget, DepKind, Dependency};
 use crate::core::resolver::types::FeaturesSet;
 use crate::core::resolver::{Resolve, ResolveBehavior};
 use crate::core::{FeatureValue, PackageId, PackageIdSpec, PackageSet, Workspace};
-use crate::util::interning::{InternedString, INTERNED_DEFAULT};
 use crate::util::CargoResult;
-use anyhow::{bail, Context};
+use crate::util::interning::{INTERNED_DEFAULT, InternedString};
+use anyhow::{Context, bail};
 use itertools::Itertools;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::rc::Rc;
 
 /// The key used in various places to store features for a particular dependency.
 /// The actual discrimination happens with the [`FeaturesFor`] type.
-type PackageFeaturesKey = (PackageId, FeaturesFor);
+pub type PackageFeaturesKey = (PackageId, FeaturesFor);
 /// Map of activated features.
-type ActivateMap = HashMap<PackageFeaturesKey, BTreeSet<InternedString>>;
+pub type ActivateMap = HashMap<PackageFeaturesKey, BTreeSet<InternedString>>;
 
 /// Set of all activated features for all packages in the resolve graph.
 pub struct ResolvedFeatures {
-    activated_features: ActivateMap,
+    pub activated_features: ActivateMap,
     /// Optional dependencies that should be built.
     ///
     /// The value is the `name_in_toml` of the dependencies.
-    activated_dependencies: ActivateMap,
-    opts: FeatureOpts,
+    pub activated_dependencies: ActivateMap,
+    pub opts: FeatureOpts,
 }
 
 /// Options for how the feature resolver works.

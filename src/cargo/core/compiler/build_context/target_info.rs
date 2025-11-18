@@ -15,7 +15,7 @@ use crate::util::interning::InternedString;
 use crate::util::{CargoResult, Rustc};
 use anyhow::Context as _;
 use cargo_platform::{Cfg, CfgExpr};
-use cargo_util::{paths, ProcessBuilder};
+use cargo_util::{ProcessBuilder, paths};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::collections::hash_map::{Entry, HashMap};
@@ -214,9 +214,9 @@ impl TargetInfo {
 
             let (output, error) = rustc
                 .cached_output(&process, extra_fingerprint)
-                .with_context(|| {
-                    "failed to run `rustc` to learn about target-specific information"
-                })?;
+                .with_context(
+                    || "failed to run `rustc` to learn about target-specific information",
+                )?;
 
             let mut lines = output.lines();
             let mut map = HashMap::new();
@@ -254,7 +254,7 @@ impl TargetInfo {
                                 &process,
                                 &output,
                                 &error,
-                            )
+                            );
                         }
                     }
                 }
@@ -1105,6 +1105,10 @@ impl<'gctx> RustcTargetData<'gctx> {
         }
         unsupported
     }
+
+    pub fn requested_kinds(&self) -> &[CompileKind] {
+        &self.requested_kinds
+    }
 }
 
 /// Structure used to deal with Rustdoc fingerprinting
@@ -1137,7 +1141,7 @@ impl RustDocFingerprint {
 
         let fingerprint_path = build_runner
             .files()
-            .host_root()
+            .host_build_root()
             .join(".rustdoc_fingerprint.json");
         let write_fingerprint = || -> CargoResult<()> {
             paths::write(
@@ -1177,7 +1181,7 @@ impl RustDocFingerprint {
             .bcx
             .all_kinds
             .iter()
-            .map(|kind| build_runner.files().layout(*kind).doc())
+            .map(|kind| build_runner.files().layout(*kind).artifact_dir().doc())
             .filter(|path| path.exists())
             .try_for_each(|path| clean_doc(path))?;
         write_fingerprint()?;
